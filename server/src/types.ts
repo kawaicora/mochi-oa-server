@@ -99,7 +99,7 @@ export interface GroupMember {
 /** 对话类型：群聊 或 一对一私信 */
 export type ConversationType = 'group' | 'dm'
 /** 消息种类：text 文本(含表情字串)、image 图片、video 视频、file 文件、folder 文件夹 */
-export type ChatKind = 'text' | 'image' | 'video' | 'file' | 'folder'
+export type ChatKind = 'text' | 'image' | 'video' | 'audio' | 'file' | 'folder'
 
 /** 对话：群聊(groupId)或私信(dmUserA/dmUserB 无序二元组) */
 export interface Conversation {

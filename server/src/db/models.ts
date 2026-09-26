@@ -273,7 +273,7 @@ export function initModels(sequelize: Sequelize): void {
       id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
       conversationId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'conversation_id' },
       fromId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'from_id' },
-      kind: { type: DataTypes.ENUM('text', 'image', 'file', 'video', 'folder'), allowNull: false, defaultValue: 'text' },
+      kind: { type: DataTypes.ENUM('text', 'image', 'file', 'video', 'audio', 'folder'), allowNull: false, defaultValue: 'text' },
       content: { type: DataTypes.TEXT, allowNull: false },
       deletedAt: { type: DataTypes.DATE(3), allowNull: true, field: 'deleted_at' }
     },

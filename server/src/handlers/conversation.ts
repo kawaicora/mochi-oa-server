@@ -10,7 +10,7 @@ function authed(socket: Socket): AuthUser | null {
 }
 
 const isText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 4000
-const isKind = (v: unknown): v is ChatKind => v === 'text' || v === 'image' || v === 'file' || v === 'video' || v === 'folder'
+const isKind = (v: unknown): v is ChatKind => v === 'text' || v === 'image' || v === 'file' || v === 'video' || v === 'audio' || v === 'folder'
 const isUuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-fA-F-]{36}$/.test(v)
 
 /** 文件夹消息的相对路径（如 6/p20260921_merge 或 default/p20260921_merge）：逐段清洗、拒绝穿越/根目录 */
@@ -37,7 +37,7 @@ async function resolveContent(store: Ctx['store'], kind: ChatKind, raw: string):
 
 /** 对话列表/历史条目的预览文本：文本直接显示（含表情字串），图片/视频/文件给占位 */
 const previewOf = (kind: ChatKind, content: string): string =>
-  kind === 'text' ? content : kind === 'image' ? '[图片]' : kind === 'video' ? '[视频]' : kind === 'folder' ? '[文件夹]' : '[文件]'
+  kind === 'text' ? content : kind === 'image' ? '[图片]' : kind === 'video' ? '[视频]' : kind === 'audio' ? '[音频]' : kind === 'folder' ? '[文件夹]' : '[文件]'
 
 /** 填消息里的发送者昵称 + 头像 */
 async function fillNicks(store: Ctx['store'], msgs: { fromId: number; nick: string; avatar?: string }[]): Promise<void> {
@@ -88,7 +88,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const raw = d.content !== undefined ? d.content : d.text
       if (!Number.isInteger(groupId) || groupId <= 0) return ack(fail('参数不合法'))
       if (kind === 'text' && !isText(raw)) return ack(fail('消息不合法（1-4000 字）'))
-      if ((kind === 'image' || kind === 'file' || kind === 'video' || kind === 'folder') && typeof raw !== 'string') return ack(fail('需要文件地址、UUID 或文件夹路径'))
+      if ((kind === 'image' || kind === 'file' || kind === 'video' || kind === 'audio' || kind === 'folder') && typeof raw !== 'string') return ack(fail('需要文件地址、UUID 或文件夹路径'))
       if ((await store.getGroupMemberRole(groupId, auth.id)) === null) return ack(fail('不在群中'))
       const me = await store.getGroupMember(groupId, auth.id)
       if (me && me.mutedUntil && me.mutedUntil.getTime() > Date.now()) return ack(fail('您已被禁言'))
@@ -139,7 +139,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const raw = d.content !== undefined ? d.content : d.text
       if (!Number.isInteger(toUserId) || toUserId <= 0 || toUserId === auth.id) return ack(fail('参数不合法'))
       if (kind === 'text' && !isText(raw)) return ack(fail('消息不合法（1-4000 字）'))
-      if ((kind === 'image' || kind === 'file' || kind === 'video' || kind === 'folder') && typeof raw !== 'string') return ack(fail('需要文件地址、UUID 或文件夹路径'))
+      if ((kind === 'image' || kind === 'file' || kind === 'video' || kind === 'audio' || kind === 'folder') && typeof raw !== 'string') return ack(fail('需要文件地址、UUID 或文件夹路径'))
       if ((await store.getUserById(toUserId)) === null) return ack(fail('对方不存在'))
 
       const content = await resolveContent(store, kind, String(raw))
