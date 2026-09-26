@@ -161,6 +161,15 @@ export class MailConfigModel extends Model {
   declare createdAt: string
 }
 
+/** 假期/工作日标记（全局日历，可增删改、多端同步） */
+export class HolidayModel extends Model {
+  declare id: number
+  declare date: string
+  declare name: string
+  declare type: 'legal' | 'workday' | 'custom'
+  declare createdAt: string
+}
+
 export function initModels(sequelize: Sequelize): void {
   UserModel.init(
     {
@@ -348,6 +357,16 @@ export function initModels(sequelize: Sequelize): void {
       priority: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 100 }
     },
     { sequelize, modelName: 'mail_configs', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
+  HolidayModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      date: { type: DataTypes.STRING(10), allowNull: false, unique: true },
+      name: { type: DataTypes.STRING(64), allowNull: false },
+      type: { type: DataTypes.ENUM('legal', 'workday', 'custom'), allowNull: false, defaultValue: 'legal' }
+    },
+    { sequelize, modelName: 'holidays', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
   )
 
 

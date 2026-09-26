@@ -16,6 +16,8 @@ import type {
   GroupMember,
   GroupRole,
   InvitationStatus,
+  Holiday,
+  HolidayType,
   Member,
   MemberProfile,
   Membership,
@@ -180,4 +182,12 @@ export interface Store {
   saveMailConfig(input: { id?: number; companyId?: number | null; email: string; displayName?: string; host: string; port?: number; secure?: boolean; user?: string; password?: string; isDefault?: boolean; enabled?: boolean; priority?: number }): Promise<MailConfig>
   /** 删除一条配置 */
   deleteMailConfig(id: number): Promise<void>
+
+  // ---- 假期（全局，供日历显示与多端同步；可增删改） ----
+  /** 列假期；year 省略/0 返回全部 */
+  listHolidays(year?: number): Promise<Holiday[]>
+  /** 新增或更新一条假期（按 date 唯一）；name/type 有值则更新 */
+  saveHoliday(input: { date: string; name: string; type: HolidayType }): Promise<Holiday>
+  /** 删除某日期假期 */
+  deleteHoliday(date: string): Promise<void>
 }

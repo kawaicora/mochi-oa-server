@@ -15,6 +15,8 @@ import type {
   Group,
   GroupMember,
   GroupRole,
+  Holiday,
+  HolidayType,
   InvitationStatus,
   Member,
   MemberProfile,
@@ -43,6 +45,7 @@ export class MemoryStore implements Store {
   private invitations = new Map<number, CompanyInvitation>()
   private sessions = new Map<number, Session>()
   private mailConfigs = new Map<number, MailConfig>()
+  private holidays = new Map<number, Holiday>()
   private userIdSeq = 1
   private companyIdSeq = 1
   private departmentIdSeq = 1
@@ -52,6 +55,7 @@ export class MemoryStore implements Store {
   private invitationIdSeq = 1
   private sessionIdSeq = 1
   private mailConfigIdSeq = 1
+  private holidayIdSeq = 1
 
   async init(): Promise<void> {}
 
@@ -830,5 +834,33 @@ export class MemoryStore implements Store {
 
   async deleteMailConfig(id: number): Promise<void> {
     this.mailConfigs.delete(id)
+  }
+
+  // ---- 假期（全局，供日历显示与多端同步；可增删改） ----
+  async listHolidays(year?: number): Promise<Holiday[]> {
+    const list = [...this.holidays.values()]
+    if (year) {
+      const prefix = `${year}-`
+      return list.filter((h) => h.date.startsWith(prefix)).sort((a, b) => a.date.localeCompare(b.date))
+    }
+    return list.sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  async saveHoliday(input: { date: string; name: string; type: HolidayType }): Promise<Holiday> {
+    const existing = [...this.holidays.values()].find((h) => h.date === input.date)
+    const h: Holiday = {
+      id: existing?.id ?? this.holidayIdSeq++,
+      date: input.date,
+      name: input.name,
+      type: input.type,
+      createdAt: existing?.createdAt ?? new Date().toISOString()
+    }
+    this.holidays.set(h.id, h)
+    return h
+  }
+
+  async deleteHoliday(date: string): Promise<void> {
+    const hit = [...this.holidays.values()].find((h) => h.date === date)
+    if (hit) this.holidays.delete(hit.id)
   }
 }

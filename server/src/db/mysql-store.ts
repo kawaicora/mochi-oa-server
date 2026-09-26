@@ -16,6 +16,8 @@ import type {
   Group,
   GroupMember,
   GroupRole,
+  Holiday,
+  HolidayType,
   InvitationStatus,
   Member,
   MailConfig,
@@ -37,6 +39,7 @@ import {
   FriendModel,
   GroupMemberModel,
   GroupModel,
+  HolidayModel,
   MailConfigModel,
   MemberProfileModel,
   MessageModel,
@@ -947,5 +950,37 @@ export class MySqlStore implements Store {
 
   async deleteMailConfig(id: number): Promise<void> {
     await MailConfigModel.destroy({ where: { id } })
+  }
+
+  // ---- 假期（全局，供日历显示与多端同步；可增删改） ----
+  private toHoliday(m: HolidayModel): Holiday {
+    return {
+      id: Number(m.id),
+      date: m.date,
+      name: m.name,
+      type: m.type as HolidayType,
+      createdAt: toIso(m.createdAt)
+    }
+  }
+
+  async listHolidays(year?: number): Promise<Holiday[]> {
+    const where = year ? { date: { [Op.startsWith]: `${year}-` } } : {}
+    const rows = await HolidayModel.findAll({ where, order: [['date', 'ASC']] })
+    return rows.map((m) => this.toHoliday(m))
+  }
+
+  async saveHoliday(input: { date: string; name: string; type: HolidayType }): Promise<Holiday> {
+    const existing = await HolidayModel.findOne({ where: { date: input.date } })
+    if (existing) {
+      await existing.update({ name: input.name, type: input.type })
+      const m = await HolidayModel.findByPk(existing.id)
+      return this.toHoliday(m!)
+    }
+    const m = await HolidayModel.create({ date: input.date, name: input.name, type: input.type })
+    return this.toHoliday(m)
+  }
+
+  async deleteHoliday(date: string): Promise<void> {
+    await HolidayModel.destroy({ where: { date } })
   }
 }

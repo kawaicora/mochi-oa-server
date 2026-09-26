@@ -262,3 +262,17 @@ export interface MailConfig {
   createdAt: string
 }
 
+// ==================== 假期（全局日历：法定/调休/自定义，可增删改同步） ====================
+
+/** 假期/工作日标记类型：legal=法定假期，workday=周末调休补班，custom=自定义 */
+export type HolidayType = 'legal' | 'workday' | 'custom'
+export interface Holiday {
+  id: number
+  /** 日期 YYYY-MM-DD（唯一） */
+  date: string
+  name: string
+  /** legal=法定假期，workday=周末调休补班，custom=自定义 */
+  type: HolidayType
+  createdAt: string
+}
+

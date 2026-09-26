@@ -21,6 +21,7 @@ import { registerUploadRoutes } from './files'
 import { registerResetPwdRoutes } from './reset-pwd'
 import { createMailer } from './mailer'
 import { registerMailHandlers } from './handlers/mail'
+import { registerHolidayHandlers, seedHolidays } from './handlers/holiday'
 import { fetchCloudflareIce } from './ice'
 import { sessionRoom, userRoom } from './util'
 
@@ -50,6 +51,11 @@ async function main(): Promise<void> {
     const mainMailCount = (await mailer.listConfigs(null)).length
     console.log(`[mochioa-server] 主邮件未配置环境变量，当前数据库主邮件 ${mainMailCount} 个（可由 SERVER_ADMIN 在客户端设置）；公司级配置默认空、由公司设置配置`)
   }
+
+  // ---- 播种内置法定假期（节假日可增删改、多端同步） ----
+  await seedHolidays(store).catch((err) => {
+    console.error('[mochioa-server] 法定假期种子写入失败：', err instanceof Error ? err.message : err)
+  })
 
   // ---- 播种初始管理员（静态配置 ADMIN_USER/ADMIN_PASSWORD，写入数据库） ----
   if (config.admin.username && config.admin.password) {
@@ -109,6 +115,7 @@ async function main(): Promise<void> {
   registerOrgHandlers({ io, store, config })
   registerRtcHandlers({ io, store, config })
   registerMailHandlers({ io, store, config, mailer })
+  registerHolidayHandlers({ io, store, config })
 
   // ---- HTTP 上传/文件路由（POST /api/upload、GET /files/*） ----
   registerUploadRoutes(http, store, config)
