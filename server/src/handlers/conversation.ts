@@ -24,6 +24,17 @@ function isFolderPath(v: unknown): v is string {
   })
 }
 
+/** 发送兜底：文本内容是否为音频引用（服务器 URL / 本地路径 / file://），识别为 audio 类型 */
+function isAudioRef(v: unknown): boolean {
+  if (typeof v !== 'string') return false
+  if (!/\.(mp3|wav|flac|aac|ogg|oga|opus|weba|m4a|m4b|wma|ac3|aiff|aif|au|amr|alac|mka|mid|midi|cda|cue)(\?|$)/i.test(v)) return false
+  if (/^https?:\/\//i.test(v)) return true
+  if (/^file:\/\//i.test(v)) return true
+  if (/^[a-zA-Z]:[\\/]/.test(v)) return true
+  if (/^\/[^/]/.test(v)) return true
+  return false
+}
+
 /** 内容归一：文本/表情字串直接存；图片/文件把 UUID 解析成地址(URL)再存；文件夹直接存相对路径 */
 async function resolveContent(store: Ctx['store'], kind: ChatKind, raw: string): Promise<string | null> {
   if (kind === 'text') return raw.trim()
@@ -84,8 +95,10 @@ export function registerConversationHandlers(ctx: Ctx): void {
       if (!auth) return ack(fail('未登录'))
       const d = (data ?? {}) as { groupId?: unknown; kind?: unknown; content?: unknown; text?: unknown }
       const groupId = Number(d.groupId)
-      const kind: ChatKind = isKind(d.kind) ? d.kind : 'text'
+      const kind0: ChatKind = isKind(d.kind) ? d.kind : 'text'
       const raw = d.content !== undefined ? d.content : d.text
+      // 发送兜底：文本内容若是音频引用（服务器URL/本地路径）→ 记为 audio 类型
+      const kind = kind0 === 'text' && isAudioRef(raw) ? 'audio' : kind0
       if (!Number.isInteger(groupId) || groupId <= 0) return ack(fail('参数不合法'))
       if (kind === 'text' && !isText(raw)) return ack(fail('消息不合法（1-4000 字）'))
       if ((kind === 'image' || kind === 'file' || kind === 'video' || kind === 'audio' || kind === 'folder') && typeof raw !== 'string') return ack(fail('需要文件地址、UUID 或文件夹路径'))
@@ -135,8 +148,10 @@ export function registerConversationHandlers(ctx: Ctx): void {
       if (!auth) return ack(fail('未登录'))
       const d = (data ?? {}) as { toUserId?: unknown; kind?: unknown; content?: unknown; text?: unknown }
       const toUserId = Number(d.toUserId)
-      const kind: ChatKind = isKind(d.kind) ? d.kind : 'text'
+      const kind0: ChatKind = isKind(d.kind) ? d.kind : 'text'
       const raw = d.content !== undefined ? d.content : d.text
+      // 发送兜底：文本内容若是音频引用（服务器URL/本地路径）→ 记为 audio 类型
+      const kind = kind0 === 'text' && isAudioRef(raw) ? 'audio' : kind0
       if (!Number.isInteger(toUserId) || toUserId <= 0 || toUserId === auth.id) return ack(fail('参数不合法'))
       if (kind === 'text' && !isText(raw)) return ack(fail('消息不合法（1-4000 字）'))
       if ((kind === 'image' || kind === 'file' || kind === 'video' || kind === 'audio' || kind === 'folder') && typeof raw !== 'string') return ack(fail('需要文件地址、UUID 或文件夹路径'))
