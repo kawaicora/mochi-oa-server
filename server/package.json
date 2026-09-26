@@ -1,0 +1,39 @@
+{
+  "name": "mochioa-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "mochioa 服务端：基于 Socket.IO 的注册登录 + 多 company 组织管理服务，支持 MySQL，可编译 Linux/Windows/macOS",
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json && node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node scripts/smoke-test.mjs",
+    "pkg:win": "pkg dist/index.js --targets node22-win-x64 --output dist/bin/mochioa-server-win-x64",
+    "pkg:linux": "pkg dist/index.js --targets node22-linux-x64 --output dist/bin/mochioa-server-linux-x64",
+    "pkg:mac": "pkg dist/index.js --targets node22-macos-arm64,node22-macos-x64 --output dist/bin/mochioa-server-macos",
+    "pkg:all": "npm run build && npm run pkg:win && npm run pkg:linux && npm run pkg:mac"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.4",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.4.0",
+    "mysql2": "^3.11.5",
+    "nodemailer": "^10.0.10",
+    "sequelize": "^6.37.8",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^22.10.2",
+    "@yao-pkg/pkg": "^6.22.0",
+    "socket.io-client": "^4.8.1",
+    "typescript": "^5.6.3"
+  }
+}
