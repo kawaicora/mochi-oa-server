@@ -233,7 +233,17 @@ export function registerTaskHandlers(ctx: Ctx): void {
       if (!t) return ack(fail('任务不存在'))
       if (!(await memberRoleOf(store, t.companyId, auth.id))) return ack(fail('非本公司成员'))
       if (!TASK_STATUSES.includes(status)) return ack(fail('状态不合法'))
-      if (status === 'completed' && !note) return ack(fail('完成任务需填写说明'))
+      if (!note) return ack(fail('流转需填写说明'))
+      // 状态流转按顺序：只允许合法的相邻流转
+      const TRANSITIONS: Record<string, string[]> = {
+        created: ['in_progress', 'completed', 'pending_extension'],
+        in_progress: ['completed', 'pending_extension'],
+        completed: [],
+        pending_extension: ['extended', 'in_progress'],
+        extended: ['in_progress', 'completed'],
+        overdue: ['in_progress', 'completed', 'pending_extension']
+      }
+      if (!TRANSITIONS[t.status as string]?.includes(status)) return ack(fail(`不可从「${t.status}」流转到「${status}」`))
       const task = await store.setTaskStatus({ taskId, status, userId: auth.id, note })
       io.emit('task:tasksUpdated', { companyId: t.companyId })
       ack(ok({ task }))
