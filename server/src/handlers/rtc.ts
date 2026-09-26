@@ -366,7 +366,8 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       await addSocket(socket, rtcId, u)
       socket.to(rtcRoom(rtcId)).emit('rtc:peerJoined', { room: rtcId, peer: peerOf(socket) })
       // 通知在线群成员（群房间）
-      io.to(groupRoom(gid)).emit('rtc:groupCall', { room: rtcId, kind, groupId: gid, from: peerOf(socket), ts: Date.now() })
+      // 只通知群内其它成员（socket.to 排除发起人自己，避免发起人也弹接听窗口）
+      socket.to(groupRoom(gid)).emit('rtc:groupCall', { room: rtcId, kind, groupId: gid, from: peerOf(socket), ts: Date.now() })
       ack(
         ok({
           room: view(r),
