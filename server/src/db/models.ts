@@ -1,5 +1,7 @@
 import { DataTypes, Model, type Sequelize } from 'sequelize'
-import type { ChatKind, CompanyRole, ConversationType, GroupRole, TaskStatus, ProjectRole, AssignmentStatus, IssueStatus, ExtensionStatus } from '../types'
+import type { ChatKind, CompanyRole, ConversationType, GroupRole, TaskStatus, ProjectRole, AssignmentStatus, IssueStatus, ExtensionStatus,
+  RequirementStatus, RequirementPriority, RequirementCategory,
+  BugStatus, BugSeverity, BugPriority, PlanStatus } from '../types'
 
 /** ORM 模型定义（Sequelize，声明式，类似 SQLAlchemy；建表用 sequelize.sync()，无手写 SQL） */
 
@@ -259,6 +261,94 @@ export class TaskExtensionModel extends Model {
   declare status: ExtensionStatus
   declare decidedBy: number | null
   declare decidedAt: string | null
+  declare createdAt: string
+}
+
+/** TAPD 需求 */
+export class RequirementModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare projectId: number | null
+  declare code: string
+  declare title: string
+  declare description: string
+  declare category: RequirementCategory
+  declare priority: RequirementPriority
+  declare status: RequirementStatus
+  declare handlerId: number | null
+  declare creatorId: number
+  declare startTime: Date
+  declare dueTime: Date
+  declare completedTime: Date | null
+  declare createdAt: string
+  declare updatedAt: string
+}
+
+/** TAPD 缺陷 */
+export class BugModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare projectId: number | null
+  declare requirementId: number | null
+  declare code: string
+  declare title: string
+  declare description: string
+  declare severity: BugSeverity
+  declare priority: BugPriority
+  declare status: BugStatus
+  declare handlerId: number | null
+  declare creatorId: number
+  declare foundVersion: string
+  declare createdAt: string
+  declare updatedAt: string
+}
+
+/** TAPD 计划 */
+export class PlanModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare projectId: number | null
+  declare name: string
+  declare description: string
+  declare startTime: Date
+  declare dueTime: Date
+  declare status: PlanStatus
+  declare creatorId: number
+  declare createdAt: string
+  declare updatedAt: string
+}
+
+/** TAPD 文档 */
+export class ProjectDocumentModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare projectId: number | null
+  declare title: string
+  declare content: string
+  declare creatorId: number
+  declare createdAt: string
+  declare updatedAt: string
+}
+
+/** TAPD Wiki */
+export class WikiPageModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare projectId: number | null
+  declare title: string
+  declare content: string
+  declare creatorId: number
+  declare createdAt: string
+  declare updatedAt: string
+}
+
+/** 需求-任务关联 */
+export class RequirementLinkModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare requirementId: number
+  declare taskId: number
+  declare userId: number
   declare createdAt: string
 }
 
@@ -564,6 +654,95 @@ export function initModels(sequelize: Sequelize): void {
   )
 
 
+  RequirementModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      projectId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'project_id' },
+      code: { type: DataTypes.STRING(32), allowNull: false, defaultValue: '' },
+      title: { type: DataTypes.STRING(128), allowNull: false },
+      description: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      category: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'uncategorized' },
+      priority: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'middle' },
+      status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'planning' },
+      handlerId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'handler_id' },
+      creatorId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'creator_id' },
+      startTime: { type: DataTypes.DATE(3), allowNull: false, field: 'start_time' },
+      dueTime: { type: DataTypes.DATE(3), allowNull: false, field: 'due_time' },
+      completedTime: { type: DataTypes.DATE(3), allowNull: true, field: 'completed_time' }
+    },
+    { sequelize, modelName: 'requirements', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: 'updatedAt' }
+  )
+
+  BugModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      projectId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'project_id' },
+      requirementId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'requirement_id' },
+      code: { type: DataTypes.STRING(32), allowNull: false, defaultValue: '' },
+      title: { type: DataTypes.STRING(128), allowNull: false },
+      description: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      severity: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'normal' },
+      priority: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'middle' },
+      status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'pending' },
+      handlerId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'handler_id' },
+      creatorId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'creator_id' },
+      foundVersion: { type: DataTypes.STRING(64), allowNull: false, defaultValue: '', field: 'found_version' }
+    },
+    { sequelize, modelName: 'bugs', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: 'updatedAt' }
+  )
+
+  PlanModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      projectId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'project_id' },
+      name: { type: DataTypes.STRING(128), allowNull: false },
+      description: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      startTime: { type: DataTypes.DATE(3), allowNull: false, field: 'start_time' },
+      dueTime: { type: DataTypes.DATE(3), allowNull: false, field: 'due_time' },
+      status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'not_started' },
+      creatorId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'creator_id' }
+    },
+    { sequelize, modelName: 'plans', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: 'updatedAt' }
+  )
+
+  ProjectDocumentModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      projectId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'project_id' },
+      title: { type: DataTypes.STRING(128), allowNull: false },
+      content: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      creatorId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'creator_id' }
+    },
+    { sequelize, modelName: 'documents', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: 'updatedAt' }
+  )
+
+  WikiPageModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      projectId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'project_id' },
+      title: { type: DataTypes.STRING(128), allowNull: false },
+      content: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      creatorId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'creator_id' }
+    },
+    { sequelize, modelName: 'wiki_pages', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: 'updatedAt' }
+  )
+
+  RequirementLinkModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      requirementId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'requirement_id' },
+      taskId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'task_id' },
+      userId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'user_id' }
+    },
+    { sequelize, modelName: 'requirement_links', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
   // 关联（映射表关系，供 join 查询使用）
   MailConfigModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
   CompanyModel.belongsTo(UserModel, { as: 'owner', foreignKey: 'ownerId' })
@@ -609,4 +788,29 @@ export function initModels(sequelize: Sequelize): void {
   TaskStatusLogModel.belongsTo(UserModel, { foreignKey: 'userId' })
   TaskExtensionModel.belongsTo(TaskModel, { foreignKey: 'taskId' })
   TaskExtensionModel.belongsTo(UserModel, { foreignKey: 'userId' })
+
+  RequirementModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
+  RequirementModel.belongsTo(ProjectModel, { foreignKey: 'projectId' })
+  RequirementModel.belongsTo(UserModel, { as: 'handler', foreignKey: 'handlerId' })
+  RequirementModel.belongsTo(UserModel, { as: 'creator', foreignKey: 'creatorId' })
+  RequirementLinkModel.belongsTo(RequirementModel, { foreignKey: 'requirementId' })
+  RequirementLinkModel.belongsTo(TaskModel, { foreignKey: 'taskId' })
+
+  BugModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
+  BugModel.belongsTo(ProjectModel, { foreignKey: 'projectId' })
+  BugModel.belongsTo(RequirementModel, { foreignKey: 'requirementId' })
+  BugModel.belongsTo(UserModel, { as: 'handler', foreignKey: 'handlerId' })
+  BugModel.belongsTo(UserModel, { as: 'creator', foreignKey: 'creatorId' })
+
+  PlanModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
+  PlanModel.belongsTo(ProjectModel, { foreignKey: 'projectId' })
+  PlanModel.belongsTo(UserModel, { as: 'creator', foreignKey: 'creatorId' })
+
+  ProjectDocumentModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
+  ProjectDocumentModel.belongsTo(ProjectModel, { foreignKey: 'projectId' })
+  ProjectDocumentModel.belongsTo(UserModel, { as: 'creator', foreignKey: 'creatorId' })
+
+  WikiPageModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
+  WikiPageModel.belongsTo(ProjectModel, { foreignKey: 'projectId' })
+  WikiPageModel.belongsTo(UserModel, { as: 'creator', foreignKey: 'creatorId' })
 }

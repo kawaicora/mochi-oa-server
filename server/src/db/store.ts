@@ -34,7 +34,16 @@ import type {
   TaskExtension,
   TaskStatus,
   AssignmentStatus,
-  TaskDetail
+  TaskDetail,
+  Requirement,
+  RequirementStatus,
+  Bug,
+  BugStatus,
+  Plan,
+  ProjectDocument,
+  WikiPage,
+  DashboardStats,
+  MemberTrackItem
 } from '../types'
 
 /** 带密码散列的用户记录（仅内部使用） */
@@ -233,4 +242,39 @@ export interface Store {
 
   requestTaskExtension(input: { taskId: number; userId: number; requestedDueTime: string; reason: string }): Promise<TaskExtension>
   decideTaskExtension(input: { extensionId: number; approved: boolean; decidedBy: number }): Promise<TaskExtension | null>
+
+  // ---- TAPD：需求 / 缺陷 / 计划 / 文档 / Wiki / 仪表盘 / 成员跟踪 ----
+  createRequirement(input: { companyId: number; projectId?: number | null; title: string; description?: string; category?: string; priority?: string; handlerId?: number | null; startTime: string; dueTime: string; creatorId: number }): Promise<Requirement>
+  listRequirements(companyId: number, projectId?: number | null): Promise<Requirement[]>
+  getRequirement(requirementId: number): Promise<Requirement | null>
+  updateRequirement(input: { id: number; title?: string; description?: string; category?: string; priority?: string; handlerId?: number | null; startTime?: string; dueTime?: string }): Promise<Requirement | null>
+  setRequirementStatus(input: { requirementId: number; status: RequirementStatus; userId: number }): Promise<Requirement | null>
+  deleteRequirement(requirementId: number): Promise<void>
+  /** 关联任务（先清后写），返回当前关联任务 id */
+  linkRequirementTasks(input: { requirementId: number; taskIds: number[]; userId: number; companyId: number }): Promise<number[]>
+
+  createBug(input: { companyId: number; projectId?: number | null; requirementId?: number | null; title: string; description?: string; severity?: string; priority?: string; handlerId?: number | null; foundVersion?: string; creatorId: number }): Promise<Bug>
+  listBugs(companyId: number, projectId?: number | null): Promise<Bug[]>
+  getBug(bugId: number): Promise<Bug | null>
+  updateBug(input: { id: number; title?: string; description?: string; severity?: string; priority?: string; handlerId?: number | null; foundVersion?: string }): Promise<Bug | null>
+  setBugStatus(input: { bugId: number; status: BugStatus; userId: number }): Promise<Bug | null>
+  deleteBug(bugId: number): Promise<void>
+
+  createPlan(input: { companyId: number; projectId?: number | null; name: string; description?: string; startTime: string; dueTime: string; creatorId: number }): Promise<Plan>
+  listPlans(companyId: number, projectId?: number | null): Promise<Plan[]>
+  updatePlan(input: { id: number; name?: string; description?: string; startTime?: string; dueTime?: string; status?: string }): Promise<Plan | null>
+  deletePlan(planId: number): Promise<void>
+
+  createDocument(input: { companyId: number; projectId?: number | null; title: string; content?: string; creatorId: number }): Promise<ProjectDocument>
+  listDocuments(companyId: number, projectId?: number | null): Promise<ProjectDocument[]>
+  updateDocument(input: { id: number; title?: string; content?: string }): Promise<ProjectDocument | null>
+  deleteDocument(documentId: number): Promise<void>
+
+  createWikiPage(input: { companyId: number; projectId?: number | null; title: string; content?: string; creatorId: number }): Promise<WikiPage>
+  listWikiPages(companyId: number, projectId?: number | null): Promise<WikiPage[]>
+  updateWikiPage(input: { id: number; title?: string; content?: string }): Promise<WikiPage | null>
+  deleteWikiPage(wikiId: number): Promise<void>
+
+  dashboardStats(companyId: number, projectId?: number | null): Promise<DashboardStats>
+  memberTracking(companyId: number, projectId?: number | null): Promise<MemberTrackItem[]>
 }

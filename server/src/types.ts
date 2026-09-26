@@ -389,6 +389,124 @@ export interface TaskDetail {
   logs: TaskStatusLog[]
 }
 
+// ==================== TAPD 扩展：需求 / 缺陷 / 计划 / 文档 / Wiki / 仪表盘 / 成员跟踪 ====================
+
+/** 需求状态：待规划 / 进行中 / 完成 / 已关闭 */
+export type RequirementStatus = 'planning' | 'in_progress' | 'done' | 'closed'
+/** 需求优先级：Nice To Have / Middle / High */
+export type RequirementPriority = 'nth' | 'middle' | 'high'
+/** 需求分类：未分类 / 产品需求 / 技术需求 */
+export type RequirementCategory = 'uncategorized' | 'product' | 'tech'
+/** 缺陷状态：待处理 / 处理中 / 已验证 / 已关闭 */
+export type BugStatus = 'pending' | 'processing' | 'verified' | 'closed'
+/** 缺陷严重程度：轻微 / 一般 / 严重 / 致命 */
+export type BugSeverity = 'minor' | 'normal' | 'major' | 'critical'
+/** 缺陷优先级：低 / 中 / 高 */
+export type BugPriority = 'low' | 'middle' | 'high'
+/** 计划状态：未开始 / 进行中 / 已完成 / 已取消 */
+export type PlanStatus = 'not_started' | 'in_progress' | 'done' | 'canceled'
+
+export interface Requirement {
+  id: number
+  companyId: number
+  projectId: number | null
+  code: string
+  title: string
+  description: string
+  category: RequirementCategory
+  priority: RequirementPriority
+  status: RequirementStatus
+  handlerId: number | null
+  creatorId: number
+  startTime: string
+  dueTime: string
+  completedTime: string | null
+  /** 关联的任务 id */
+  linkedTaskIds: number[]
+  createdAt: string
+  updatedAt: string
+  handlerName?: string
+  creatorName?: string
+}
+
+export interface Bug {
+  id: number
+  companyId: number
+  projectId: number | null
+  requirementId: number | null
+  code: string
+  title: string
+  description: string
+  severity: BugSeverity
+  priority: BugPriority
+  status: BugStatus
+  handlerId: number | null
+  creatorId: number
+  /** 发现版本 */
+  foundVersion: string
+  createdAt: string
+  updatedAt: string
+  handlerName?: string
+  creatorName?: string
+}
+
+export interface Plan {
+  id: number
+  companyId: number
+  projectId: number | null
+  name: string
+  description: string
+  startTime: string
+  dueTime: string
+  status: PlanStatus
+  creatorId: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectDocument {
+  id: number
+  companyId: number
+  projectId: number | null
+  title: string
+  content: string
+  creatorId: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WikiPage {
+  id: number
+  companyId: number
+  projectId: number | null
+  title: string
+  content: string
+  creatorId: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** 项目仪表盘聚合统计 */
+export interface DashboardStats {
+  newRequirement30d: number
+  overdueRequirement: number
+  bugResolveRate: number
+  unresolvedBug: number
+  requirementByStatus: Record<string, number>
+  bugBySeverity: Record<string, number>
+}
+
+/** 成员任务跟踪：每位成员 完成 / 进行中 / 超时 任务数 */
+export interface MemberTrackItem {
+  userId: number
+  nick: string
+  username: string
+  total: number
+  completed: number
+  inProgress: number
+  overdue: number
+}
+
 // ==================== 假期（全局日历：法定/调休/自定义，可增删改同步） ====================
 
 /** 假期/工作日标记类型：legal=法定假期，workday=周末调休补班，custom=自定义 */

@@ -23,6 +23,7 @@ import { createMailer } from './mailer'
 import { registerMailHandlers } from './handlers/mail'
 import { registerHolidayHandlers, seedHolidays } from './handlers/holiday'
 import { registerTaskHandlers } from './handlers/task'
+import { registerProjectMgmtHandlers } from './handlers/project-mgmt'
 import { fetchCloudflareIce } from './ice'
 import { sessionRoom, userRoom } from './util'
 
@@ -118,6 +119,7 @@ async function main(): Promise<void> {
   registerMailHandlers({ io, store, config, mailer })
   registerHolidayHandlers({ io, store, config })
   registerTaskHandlers({ io, store, config })
+  registerProjectMgmtHandlers({ io, store, config })
 
   // ---- HTTP 上传/文件路由（POST /api/upload、GET /files/*） ----
   registerUploadRoutes(http, store, config)

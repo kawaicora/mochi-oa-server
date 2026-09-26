@@ -38,7 +38,21 @@ import type {
   AssignmentStatus,
   IssueStatus,
   ExtensionStatus,
-  TaskDetail
+  TaskDetail,
+  Requirement,
+  RequirementStatus,
+  RequirementPriority,
+  RequirementCategory,
+  Bug,
+  BugStatus,
+  BugSeverity,
+  BugPriority,
+  Plan,
+  PlanStatus,
+  ProjectDocument,
+  WikiPage,
+  DashboardStats,
+  MemberTrackItem
 } from '../types'
 import { AlreadyExistsError, NotFoundError, type Store, type UserWithPassword } from './store'
 import {
@@ -66,6 +80,12 @@ import {
   TaskIssueModel,
   TaskModel,
   TaskStatusLogModel,
+  RequirementModel,
+  BugModel,
+  PlanModel,
+  ProjectDocumentModel,
+  WikiPageModel,
+  RequirementLinkModel,
   UserModel,
   initModels
 } from './models'
@@ -1098,6 +1118,91 @@ export class MySqlStore implements Store {
     return rows.map((r) => ({ ...r, ...(map.get(r.userId) ?? {}) }))
   }
 
+  private toRequirement(m: RequirementModel): Requirement {
+    return {
+      id: Number(m.id), companyId: Number(m.companyId), projectId: m.projectId === null ? null : Number(m.projectId),
+      code: m.code, title: m.title, description: m.description ?? '',
+      category: (m.category as RequirementCategory) ?? 'uncategorized',
+      priority: (m.priority as RequirementPriority) ?? 'middle',
+      status: (m.status as RequirementStatus) ?? 'planning',
+      handlerId: m.handlerId === null ? null : Number(m.handlerId),
+      creatorId: Number(m.creatorId),
+      startTime: toIso(m.startTime), dueTime: toIso(m.dueTime),
+      completedTime: m.completedTime ? toIso(m.completedTime) : null,
+      linkedTaskIds: [],
+      createdAt: toIso(m.createdAt), updatedAt: toIso(m.updatedAt)
+    }
+  }
+
+  private toBug(m: BugModel): Bug {
+    return {
+      id: Number(m.id), companyId: Number(m.companyId), projectId: m.projectId === null ? null : Number(m.projectId),
+      requirementId: m.requirementId === null ? null : Number(m.requirementId),
+      code: m.code, title: m.title, description: m.description ?? '',
+      severity: (m.severity as BugSeverity) ?? 'normal',
+      priority: (m.priority as BugPriority) ?? 'middle',
+      status: (m.status as BugStatus) ?? 'pending',
+      handlerId: m.handlerId === null ? null : Number(m.handlerId),
+      creatorId: Number(m.creatorId),
+      foundVersion: m.foundVersion ?? '',
+      createdAt: toIso(m.createdAt), updatedAt: toIso(m.updatedAt)
+    }
+  }
+
+  private toPlan(m: PlanModel): Plan {
+    return {
+      id: Number(m.id), companyId: Number(m.companyId), projectId: m.projectId === null ? null : Number(m.projectId),
+      name: m.name, description: m.description ?? '',
+      startTime: toIso(m.startTime), dueTime: toIso(m.dueTime),
+      status: (m.status as PlanStatus) ?? 'not_started', creatorId: Number(m.creatorId),
+      createdAt: toIso(m.createdAt), updatedAt: toIso(m.updatedAt)
+    }
+  }
+
+  private toDocument(m: ProjectDocumentModel): ProjectDocument {
+    return {
+      id: Number(m.id), companyId: Number(m.companyId), projectId: m.projectId === null ? null : Number(m.projectId),
+      title: m.title, content: m.content ?? '', creatorId: Number(m.creatorId),
+      createdAt: toIso(m.createdAt), updatedAt: toIso(m.updatedAt)
+    }
+  }
+
+  private toWikiPage(m: WikiPageModel): WikiPage {
+    return {
+      id: Number(m.id), companyId: Number(m.companyId), projectId: m.projectId === null ? null : Number(m.projectId),
+      title: m.title, content: m.content ?? '', creatorId: Number(m.creatorId),
+      createdAt: toIso(m.createdAt), updatedAt: toIso(m.updatedAt)
+    }
+  }
+
+  /** 给需求/缺陷补充 处理人、创建人 名字 */
+  private async enrichUsers(rows: Array<{ handlerId: number | null; creatorId: number }>): Promise<Map<number, string>> {
+    const ids = new Set<number>()
+    for (const r of rows) { if (r.handlerId) ids.add(r.handlerId); ids.add(r.creatorId) }
+    const users = await UserModel.findAll({ where: { id: { [Op.in]: [...ids] } } })
+    const map = new Map<number, { nick: string; username: string }>()
+    for (const u of users) map.set(Number(u.id), { nick: u.nick, username: u.username })
+    const names = new Map<number, string>()
+    for (const id of ids) { const u = map.get(id); names.set(id, u ? (u.nick || u.username || '') : '') }
+    return names
+  }
+  private async enrichReq(rows: Requirement[]): Promise<Requirement[]> {
+    const names = await this.enrichUsers(rows)
+    return rows.map((r) => ({
+      ...r,
+      handlerName: r.handlerId ? names.get(r.handlerId) ?? '' : '',
+      creatorName: names.get(r.creatorId) ?? ''
+    }))
+  }
+  private async enrichBug(rows: Bug[]): Promise<Bug[]> {
+    const names = await this.enrichUsers(rows)
+    return rows.map((r) => ({
+      ...r,
+      handlerName: r.handlerId ? names.get(r.handlerId) ?? '' : '',
+      creatorName: names.get(r.creatorId) ?? ''
+    }))
+  }
+
   async createProject(input: { companyId: number; name: string; pmId: number }): Promise<Project> {
     const m = await ProjectModel.create({ companyId: input.companyId, name: input.name, pmId: input.pmId })
     await ProjectMemberModel.create({ projectId: Number(m.id), userId: input.pmId, role: 'pm' })
@@ -1274,5 +1379,268 @@ export class MySqlStore implements Store {
     }
     const m = await TaskExtensionModel.findByPk(input.extensionId)
     return this.toExtension(m!)
+  }
+
+  // ---- TAPD：需求 ----
+  async createRequirement(input: { companyId: number; projectId?: number | null; title: string; description?: string; category?: string; priority?: string; handlerId?: number | null; startTime: string; dueTime: string; creatorId: number }): Promise<Requirement> {
+    const m = await RequirementModel.create({
+      companyId: input.companyId,
+      projectId: input.projectId && input.projectId > 0 ? input.projectId : null,
+      title: input.title, description: input.description ?? '',
+      category: input.category ?? 'uncategorized', priority: input.priority ?? 'middle',
+      status: 'planning',
+      handlerId: input.handlerId && input.handlerId > 0 ? input.handlerId : null,
+      creatorId: input.creatorId,
+      startTime: new Date(input.startTime), dueTime: new Date(input.dueTime),
+      code: ''
+    })
+    const code = 'REQ-' + (100000 + Number(m.id))
+    await m.update({ code })
+    return this.toRequirement(m)
+  }
+
+  async listRequirements(companyId: number, projectId?: number | null): Promise<Requirement[]> {
+    const where: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) where.projectId = projectId
+    const rows = await RequirementModel.findAll({ where, order: [['id', 'DESC']] })
+    const links = await RequirementLinkModel.findAll({ where: { companyId } })
+    const map = new Map<number, number[]>()
+    for (const l of links) { const arr = map.get(Number(l.requirementId)) ?? []; arr.push(Number(l.taskId)); map.set(Number(l.requirementId), arr) }
+    const list = rows.map((m) => { const r = this.toRequirement(m); r.linkedTaskIds = map.get(r.id) ?? []; return r })
+    return this.enrichReq(list)
+  }
+
+  async getRequirement(requirementId: number): Promise<Requirement | null> {
+    const m = await RequirementModel.findByPk(requirementId)
+    return m ? this.toRequirement(m) : null
+  }
+
+  async updateRequirement(input: { id: number; title?: string; description?: string; category?: string; priority?: string; handlerId?: number | null; startTime?: string; dueTime?: string }): Promise<Requirement | null> {
+    const r = await RequirementModel.findByPk(input.id)
+    if (!r) return null
+    const v: Record<string, unknown> = {}
+    if (input.title !== undefined) v.title = input.title
+    if (input.description !== undefined) v.description = input.description
+    if (input.category !== undefined) v.category = input.category
+    if (input.priority !== undefined) v.priority = input.priority
+    if (input.handlerId !== undefined) v.handlerId = input.handlerId && input.handlerId > 0 ? input.handlerId : null
+    if (input.startTime !== undefined) v.startTime = new Date(input.startTime)
+    if (input.dueTime !== undefined) v.dueTime = new Date(input.dueTime)
+    await r.update(v)
+    const m = await RequirementModel.findByPk(input.id)
+    return m ? this.toRequirement(m) : null
+  }
+
+  async setRequirementStatus(input: { requirementId: number; status: RequirementStatus; userId: number }): Promise<Requirement | null> {
+    const r = await RequirementModel.findByPk(input.requirementId)
+    if (!r) return null
+    const v: Record<string, unknown> = { status: input.status }
+    if (input.status === 'done') v.completedTime = new Date()
+    await r.update(v)
+    const m = await RequirementModel.findByPk(input.requirementId)
+    return m ? this.toRequirement(m) : null
+  }
+
+  async deleteRequirement(requirementId: number): Promise<void> {
+    await RequirementLinkModel.destroy({ where: { requirementId } })
+    await RequirementModel.destroy({ where: { id: requirementId } })
+  }
+
+  async linkRequirementTasks(input: { requirementId: number; taskIds: number[]; userId: number; companyId: number }): Promise<number[]> {
+    await RequirementLinkModel.destroy({ where: { requirementId: input.requirementId } })
+    for (const tid of input.taskIds) {
+      await RequirementLinkModel.create({ companyId: input.companyId, requirementId: input.requirementId, taskId: tid, userId: input.userId })
+    }
+    return input.taskIds
+  }
+
+  // ---- TAPD：缺陷 ----
+  async createBug(input: { companyId: number; projectId?: number | null; requirementId?: number | null; title: string; description?: string; severity?: string; priority?: string; handlerId?: number | null; foundVersion?: string; creatorId: number }): Promise<Bug> {
+    const m = await BugModel.create({
+      companyId: input.companyId,
+      projectId: input.projectId && input.projectId > 0 ? input.projectId : null,
+      requirementId: input.requirementId && input.requirementId > 0 ? input.requirementId : null,
+      title: input.title, description: input.description ?? '',
+      severity: input.severity ?? 'normal', priority: input.priority ?? 'middle',
+      status: 'pending',
+      handlerId: input.handlerId && input.handlerId > 0 ? input.handlerId : null,
+      creatorId: input.creatorId, foundVersion: input.foundVersion ?? '',
+      code: ''
+    })
+    const code = 'BUG-' + (100000 + Number(m.id))
+    await m.update({ code })
+    return this.toBug(m)
+  }
+
+  async listBugs(companyId: number, projectId?: number | null): Promise<Bug[]> {
+    const where: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) where.projectId = projectId
+    const rows = await BugModel.findAll({ where, order: [['id', 'DESC']] })
+    return this.enrichBug(rows.map((m) => this.toBug(m)))
+  }
+
+  async getBug(bugId: number): Promise<Bug | null> {
+    const m = await BugModel.findByPk(bugId)
+    return m ? this.toBug(m) : null
+  }
+
+  async updateBug(input: { id: number; title?: string; description?: string; severity?: string; priority?: string; handlerId?: number | null; foundVersion?: string }): Promise<Bug | null> {
+    const b = await BugModel.findByPk(input.id)
+    if (!b) return null
+    const v: Record<string, unknown> = {}
+    if (input.title !== undefined) v.title = input.title
+    if (input.description !== undefined) v.description = input.description
+    if (input.severity !== undefined) v.severity = input.severity
+    if (input.priority !== undefined) v.priority = input.priority
+    if (input.handlerId !== undefined) v.handlerId = input.handlerId && input.handlerId > 0 ? input.handlerId : null
+    if (input.foundVersion !== undefined) v.foundVersion = input.foundVersion
+    await b.update(v)
+    const m = await BugModel.findByPk(input.id)
+    return m ? this.toBug(m) : null
+  }
+
+  async setBugStatus(input: { bugId: number; status: BugStatus; userId: number }): Promise<Bug | null> {
+    const b = await BugModel.findByPk(input.bugId)
+    if (!b) return null
+    await b.update({ status: input.status })
+    const m = await BugModel.findByPk(input.bugId)
+    return m ? this.toBug(m) : null
+  }
+
+  async deleteBug(bugId: number): Promise<void> {
+    await BugModel.destroy({ where: { id: bugId } })
+  }
+
+  // ---- TAPD：计划 ----
+  async createPlan(input: { companyId: number; projectId?: number | null; name: string; description?: string; startTime: string; dueTime: string; creatorId: number }): Promise<Plan> {
+    const m = await PlanModel.create({
+      companyId: input.companyId,
+      projectId: input.projectId && input.projectId > 0 ? input.projectId : null,
+      name: input.name, description: input.description ?? '',
+      startTime: new Date(input.startTime), dueTime: new Date(input.dueTime),
+      status: 'not_started', creatorId: input.creatorId
+    })
+    return this.toPlan(m)
+  }
+
+  async listPlans(companyId: number, projectId?: number | null): Promise<Plan[]> {
+    const where: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) where.projectId = projectId
+    const rows = await PlanModel.findAll({ where, order: [['id', 'ASC']] })
+    return rows.map((m) => this.toPlan(m))
+  }
+
+  async updatePlan(input: { id: number; name?: string; description?: string; startTime?: string; dueTime?: string; status?: string }): Promise<Plan | null> {
+    const p = await PlanModel.findByPk(input.id)
+    if (!p) return null
+    const v: Record<string, unknown> = {}
+    if (input.name !== undefined) v.name = input.name
+    if (input.description !== undefined) v.description = input.description
+    if (input.startTime !== undefined) v.startTime = new Date(input.startTime)
+    if (input.dueTime !== undefined) v.dueTime = new Date(input.dueTime)
+    if (input.status !== undefined) v.status = input.status
+    await p.update(v)
+    const m = await PlanModel.findByPk(input.id)
+    return m ? this.toPlan(m) : null
+  }
+
+  async deletePlan(planId: number): Promise<void> {
+    await PlanModel.destroy({ where: { id: planId } })
+  }
+
+  // ---- TAPD：文档 ----
+  async createDocument(input: { companyId: number; projectId?: number | null; title: string; content?: string; creatorId: number }): Promise<ProjectDocument> {
+    const m = await ProjectDocumentModel.create({ companyId: input.companyId, projectId: input.projectId && input.projectId > 0 ? input.projectId : null, title: input.title, content: input.content ?? '', creatorId: input.creatorId })
+    return this.toDocument(m)
+  }
+
+  async listDocuments(companyId: number, projectId?: number | null): Promise<ProjectDocument[]> {
+    const where: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) where.projectId = projectId
+    const rows = await ProjectDocumentModel.findAll({ where, order: [['id', 'DESC']] })
+    return rows.map((m) => this.toDocument(m))
+  }
+
+  async updateDocument(input: { id: number; title?: string; content?: string }): Promise<ProjectDocument | null> {
+    const d = await ProjectDocumentModel.findByPk(input.id)
+    if (!d) return null
+    const v: Record<string, unknown> = {}
+    if (input.title !== undefined) v.title = input.title
+    if (input.content !== undefined) v.content = input.content
+    await d.update(v)
+    const m = await ProjectDocumentModel.findByPk(input.id)
+    return m ? this.toDocument(m) : null
+  }
+
+  async deleteDocument(documentId: number): Promise<void> {
+    await ProjectDocumentModel.destroy({ where: { id: documentId } })
+  }
+
+  // ---- TAPD：Wiki ----
+  async createWikiPage(input: { companyId: number; projectId?: number | null; title: string; content?: string; creatorId: number }): Promise<WikiPage> {
+    const m = await WikiPageModel.create({ companyId: input.companyId, projectId: input.projectId && input.projectId > 0 ? input.projectId : null, title: input.title, content: input.content ?? '', creatorId: input.creatorId })
+    return this.toWikiPage(m)
+  }
+
+  async listWikiPages(companyId: number, projectId?: number | null): Promise<WikiPage[]> {
+    const where: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) where.projectId = projectId
+    const rows = await WikiPageModel.findAll({ where, order: [['id', 'DESC']] })
+    return rows.map((m) => this.toWikiPage(m))
+  }
+
+  async updateWikiPage(input: { id: number; title?: string; content?: string }): Promise<WikiPage | null> {
+    const w = await WikiPageModel.findByPk(input.id)
+    if (!w) return null
+    const v: Record<string, unknown> = {}
+    if (input.title !== undefined) v.title = input.title
+    if (input.content !== undefined) v.content = input.content
+    await w.update(v)
+    const m = await WikiPageModel.findByPk(input.id)
+    return m ? this.toWikiPage(m) : null
+  }
+
+  async deleteWikiPage(wikiId: number): Promise<void> {
+    await WikiPageModel.destroy({ where: { id: wikiId } })
+  }
+
+  // ---- TAPD：仪表盘 + 成员跟踪 ----
+  async dashboardStats(companyId: number, projectId?: number | null): Promise<DashboardStats> {
+    const rw: Record<string, unknown> = { companyId }
+    const tw: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) { rw.projectId = projectId; tw.projectId = projectId }
+    const reqs = await RequirementModel.findAll({ where: rw })
+    const bugs = await BugModel.findAll({ where: rw })
+    const now = Date.now()
+    const thirty = now - 30 * 86400000
+    const newReq = reqs.filter((r) => new Date(r.createdAt).getTime() >= thirty).length
+    const overdueReq = reqs.filter((r) => r.status !== 'done' && r.status !== 'closed' && new Date(r.dueTime).getTime() < now).length
+    const closedBugs = bugs.filter((b) => b.status === 'closed' || b.status === 'verified').length
+    const resolveRate = bugs.length ? Math.round((closedBugs / bugs.length) * 100) : 0
+    const unresolved = bugs.filter((b) => b.status === 'pending' || b.status === 'processing').length
+    const requirementByStatus: Record<string, number> = {}
+    for (const r of reqs) requirementByStatus[r.status] = (requirementByStatus[r.status] ?? 0) + 1
+    const bugBySeverity: Record<string, number> = {}
+    for (const b of bugs) bugBySeverity[b.severity] = (bugBySeverity[b.severity] ?? 0) + 1
+    return { newRequirement30d: newReq, overdueRequirement: overdueReq, bugResolveRate: resolveRate, unresolvedBug: unresolved, requirementByStatus, bugBySeverity }
+  }
+
+  async memberTracking(companyId: number, projectId?: number | null): Promise<MemberTrackItem[]> {
+    const tw: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) tw.projectId = projectId
+    const tasks = await TaskModel.findAll({ where: tw })
+    const assigns = await TaskAssignmentModel.findAll()
+    const members = await this.getMembers(companyId)
+    const rows: MemberTrackItem[] = []
+    for (const mem of members) {
+      const myTaskIds = new Set(assigns.filter((a) => Number(a.userId) === mem.userId).map((a) => Number(a.taskId)))
+      const myTasks = tasks.filter((t) => myTaskIds.has(Number(t.id)))
+      if (!myTasks.length) continue
+      const completed = myTasks.filter((t) => t.status === 'completed' || t.status === 'extended').length
+      const inProgress = myTasks.filter((t) => t.status === 'in_progress').length
+      const overdue = myTasks.filter((t) => t.status === 'overdue' || (t.status !== 'completed' && t.status !== 'extended' && new Date(t.dueTime).getTime() < Date.now())).length
+      rows.push({ userId: mem.userId, nick: mem.nick ?? '', username: mem.username ?? '', total: myTasks.length, completed, inProgress, overdue })
+    }
+    return rows
   }
 }

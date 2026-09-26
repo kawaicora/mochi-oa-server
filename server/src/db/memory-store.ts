@@ -890,4 +890,31 @@ export class MemoryStore implements Store {
   resolveTaskIssue(): Promise<never> { return this._taskNotSupported() }
   requestTaskExtension(): Promise<never> { return this._taskNotSupported() }
   decideTaskExtension(): Promise<never> { return this._taskNotSupported() }
+  createRequirement(): Promise<never> { return this._taskNotSupported() }
+  listRequirements(): Promise<never> { return this._taskNotSupported() }
+  getRequirement(): Promise<never> { return this._taskNotSupported() }
+  updateRequirement(): Promise<never> { return this._taskNotSupported() }
+  setRequirementStatus(): Promise<never> { return this._taskNotSupported() }
+  deleteRequirement(): Promise<never> { return this._taskNotSupported() }
+  linkRequirementTasks(): Promise<never> { return this._taskNotSupported() }
+  createBug(): Promise<never> { return this._taskNotSupported() }
+  listBugs(): Promise<never> { return this._taskNotSupported() }
+  getBug(): Promise<never> { return this._taskNotSupported() }
+  updateBug(): Promise<never> { return this._taskNotSupported() }
+  setBugStatus(): Promise<never> { return this._taskNotSupported() }
+  deleteBug(): Promise<never> { return this._taskNotSupported() }
+  createPlan(): Promise<never> { return this._taskNotSupported() }
+  listPlans(): Promise<never> { return this._taskNotSupported() }
+  updatePlan(): Promise<never> { return this._taskNotSupported() }
+  deletePlan(): Promise<never> { return this._taskNotSupported() }
+  createDocument(): Promise<never> { return this._taskNotSupported() }
+  listDocuments(): Promise<never> { return this._taskNotSupported() }
+  updateDocument(): Promise<never> { return this._taskNotSupported() }
+  deleteDocument(): Promise<never> { return this._taskNotSupported() }
+  createWikiPage(): Promise<never> { return this._taskNotSupported() }
+  listWikiPages(): Promise<never> { return this._taskNotSupported() }
+  updateWikiPage(): Promise<never> { return this._taskNotSupported() }
+  deleteWikiPage(): Promise<never> { return this._taskNotSupported() }
+  dashboardStats(): Promise<never> { return this._taskNotSupported() }
+  memberTracking(): Promise<never> { return this._taskNotSupported() }
 }
