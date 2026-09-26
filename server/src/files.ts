@@ -185,6 +185,10 @@ export function registerUploadRoutes(http: HttpServer, store: Store, config: Ser
   const chunkUpload = multer({ limits: { fileSize: Math.max(4 * 1024 * 1024, Math.floor(config.file.maxBytes / 4)) } }).single('file')
 
   http.on('request', async (req, res) => {
+    // 允许跨域读取文件（头像 canvas 绘制、视频流播、fetch 转 blob 需要 CORS 头）
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range')
     const url = new URL(req.url ?? '/', 'http://localhost')
 
     // 本地文件下载；支持 {companyKey}/{子目录...}/{文件名} 结构
