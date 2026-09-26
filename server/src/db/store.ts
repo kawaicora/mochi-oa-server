@@ -226,7 +226,7 @@ export interface Store {
   /** 执行人提交分配状态 */
   setAssignmentStatus(input: { id: number; status: AssignmentStatus; userId: number }): Promise<TaskAssignment | null>
 
-  addTaskComment(input: { taskId: number; userId: number; content: string }): Promise<TaskComment>
+  addTaskComment(input: { taskId: number; userId: number; content: string; images?: string[] }): Promise<TaskComment>
 
   addTaskIssue(input: { taskId: number; userId: number; title: string; content: string }): Promise<TaskIssue>
   resolveTaskIssue(issueId: number): Promise<TaskIssue | null>

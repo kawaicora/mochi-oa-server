@@ -222,6 +222,7 @@ export class TaskCommentModel extends Model {
   declare taskId: number
   declare userId: number
   declare content: string
+  declare images: string
   declare createdAt: string
 }
 
@@ -517,7 +518,8 @@ export function initModels(sequelize: Sequelize): void {
       id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
       taskId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'task_id' },
       userId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'user_id' },
-      content: { type: DataTypes.TEXT, allowNull: false }
+      content: { type: DataTypes.TEXT, allowNull: false },
+      images: { type: DataTypes.TEXT, allowNull: true }
     },
     { sequelize, modelName: 'task_comments', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
   )

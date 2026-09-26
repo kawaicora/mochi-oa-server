@@ -85,6 +85,14 @@ const toIso = (v: unknown): string => {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
+const parseImages = (raw: unknown): string[] => {
+  if (typeof raw !== 'string' || !raw) return []
+  try {
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string').slice(0, 9) : []
+  } catch { return [] }
+}
+
 const toUser = (m: UserModel): User => ({
   id: Number(m.id),
   username: m.username,
@@ -1059,7 +1067,7 @@ export class MySqlStore implements Store {
   }
 
   private toComment(m: TaskCommentModel): TaskComment {
-    return { id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId), content: m.content, createdAt: toIso(m.createdAt) }
+    return { id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId), content: m.content, images: parseImages(m.images), createdAt: toIso(m.createdAt) }
   }
 
   private toIssue(m: TaskIssueModel): TaskIssue {
@@ -1231,8 +1239,8 @@ export class MySqlStore implements Store {
     return this.toAssignment(m!)
   }
 
-  async addTaskComment(input: { taskId: number; userId: number; content: string }): Promise<TaskComment> {
-    const m = await TaskCommentModel.create({ taskId: input.taskId, userId: input.userId, content: input.content })
+  async addTaskComment(input: { taskId: number; userId: number; content: string; images?: string[] }): Promise<TaskComment> {
+    const m = await TaskCommentModel.create({ taskId: input.taskId, userId: input.userId, content: input.content, images: JSON.stringify(input.images ?? []) })
     return this.toComment(m)
   }
 

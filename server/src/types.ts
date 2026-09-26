@@ -331,6 +331,7 @@ export interface TaskComment {
   taskId: number
   userId: number
   content: string
+  images: string[]
   createdAt: string
   username?: string
   nick?: string
