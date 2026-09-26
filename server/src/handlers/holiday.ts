@@ -112,5 +112,57 @@ export function registerHolidayHandlers(ctx: Ctx): void {
       io.emit('holiday:updated', {})
       ack(ok())
     })
+
+    // ---- 批量新增/修改假期（多选批量设假期） ----
+    socket.on('holiday:addMany', async (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const auth = authed(socket)
+      if (!auth) return ack(fail('未登录'))
+      const items = (data as { items?: unknown } | null)?.items
+      if (!Array.isArray(items) || items.length === 0) return ack(fail('参数不合法'))
+      let added = 0
+      for (const it of items) {
+        const d = (it ?? {}) as { date?: unknown; name?: unknown; type?: unknown }
+        const date = typeof d.date === 'string' ? d.date.trim() : ''
+        const name = typeof d.name === 'string' ? d.name.trim().slice(0, 32) : ''
+        const type = typeof d.type === 'string' ? (d.type as HolidayType) : 'legal'
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !name) continue
+        if (!['legal', 'workday', 'custom'].includes(type)) continue
+        await store.saveHoliday({ date, name, type })
+        added += 1
+      }
+      io.emit('holiday:updated', {})
+      ack(ok({ added }))
+    })
+
+    // ---- 批量删除假期（多选取消） ----
+    socket.on('holiday:removeMany', async (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const auth = authed(socket)
+      if (!auth) return ack(fail('未登录'))
+      const dates = (data as { dates?: unknown } | null)?.dates
+      if (!Array.isArray(dates) || dates.length === 0) return ack(fail('参数不合法'))
+      let removed = 0
+      for (const dd of dates) {
+        if (typeof dd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dd)) continue
+        await store.deleteHoliday(dd)
+        removed += 1
+      }
+      io.emit('holiday:updated', {})
+      ack(ok({ removed }))
+    })
+
+    // ---- 恢复默认：清空全部假期 → 重新种入官方法定安排 ----
+    socket.on('holiday:reset', async (_data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const auth = authed(socket)
+      if (!auth) return ack(fail('未登录'))
+      const all = await store.listHolidays()
+      for (const h of all) await store.deleteHoliday(h.date)
+      await seedHolidays(store)
+      const holidays = await store.listHolidays()
+      io.emit('holiday:updated', {})
+      ack(ok({ holidays, count: holidays.length }))
+    })
   })
 }
