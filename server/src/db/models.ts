@@ -1,5 +1,5 @@
 import { DataTypes, Model, type Sequelize } from 'sequelize'
-import type { ChatKind, CompanyRole, ConversationType, GroupRole } from '../types'
+import type { ChatKind, CompanyRole, ConversationType, GroupRole, TaskStatus, ProjectRole, AssignmentStatus, IssueStatus, ExtensionStatus } from '../types'
 
 /** ORM 模型定义（Sequelize，声明式，类似 SQLAlchemy；建表用 sequelize.sync()，无手写 SQL） */
 
@@ -167,6 +167,97 @@ export class HolidayModel extends Model {
   declare date: string
   declare name: string
   declare type: 'legal' | 'workday' | 'custom'
+  declare createdAt: string
+}
+
+/** 项目：公司下 PM 建的项目，可下放组长权限 */
+export class ProjectModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare name: string
+  declare pmId: number
+  declare createdAt: string
+}
+
+export class ProjectMemberModel extends Model {
+  declare projectId: number
+  declare userId: number
+  declare role: ProjectRole
+  declare joinedAt: string
+}
+
+/** 任务：关联公司，非本公司不显示 */
+export class TaskModel extends Model {
+  declare id: number
+  declare companyId: number
+  declare projectId: number | null
+  declare title: string
+  declare description: string
+  declare startTime: string
+  declare dueTime: string
+  declare completedTime: string | null
+  declare status: TaskStatus
+  declare isOverdue: boolean
+  declare reminderYellow: number
+  declare reminderRed: number
+  declare images: string
+  declare createdBy: number
+  declare createdAt: string
+  declare updatedAt: string
+}
+
+/** 任务分配：执行人员 + 每人执行的内容 */
+export class TaskAssignmentModel extends Model {
+  declare id: number
+  declare taskId: number
+  declare userId: number
+  declare content: string
+  declare status: AssignmentStatus
+  declare completedAt: string | null
+}
+
+/** 任务留言 */
+export class TaskCommentModel extends Model {
+  declare id: number
+  declare taskId: number
+  declare userId: number
+  declare content: string
+  declare createdAt: string
+}
+
+/** 任务问题（QA）：参与人发布遇到的问题 */
+export class TaskIssueModel extends Model {
+  declare id: number
+  declare taskId: number
+  declare userId: number
+  declare title: string
+  declare content: string
+  declare status: IssueStatus
+  declare resolvedAt: string | null
+  declare createdAt: string
+}
+
+/** 任务状态变更日志（状态变更需提供说明） */
+export class TaskStatusLogModel extends Model {
+  declare id: number
+  declare taskId: number
+  declare userId: number
+  declare fromStatus: string
+  declare toStatus: TaskStatus
+  declare note: string
+  declare createdAt: string
+}
+
+/** 任务延期申请（申请延期 / 审批） */
+export class TaskExtensionModel extends Model {
+  declare id: number
+  declare taskId: number
+  declare userId: number
+  declare requestedDueTime: string
+  declare reason: string
+  declare status: ExtensionStatus
+  declare decidedBy: number | null
+  declare decidedAt: string | null
   declare createdAt: string
 }
 
@@ -370,6 +461,107 @@ export function initModels(sequelize: Sequelize): void {
   )
 
 
+  ProjectModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      name: { type: DataTypes.STRING(64), allowNull: false },
+      pmId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'pm_id' }
+    },
+    { sequelize, modelName: 'projects', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
+  ProjectMemberModel.init(
+    {
+      projectId: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, field: 'project_id' },
+      userId: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, field: 'user_id' },
+      role: { type: DataTypes.ENUM('pm', 'leader', 'member'), allowNull: false, defaultValue: 'member' }
+    },
+    { sequelize, modelName: 'project_members', timestamps: true, underscored: true, createdAt: 'joinedAt', updatedAt: false }
+  )
+
+  TaskModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      companyId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'company_id' },
+      projectId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'project_id' },
+      title: { type: DataTypes.STRING(128), allowNull: false },
+      description: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      startTime: { type: DataTypes.DATE(3), allowNull: false, field: 'start_time' },
+      dueTime: { type: DataTypes.DATE(3), allowNull: false, field: 'due_time' },
+      completedTime: { type: DataTypes.DATE(3), allowNull: true, field: 'completed_time' },
+      status: { type: DataTypes.ENUM('created', 'in_progress', 'completed', 'pending_extension', 'extended', 'overdue'), allowNull: false, defaultValue: 'created' },
+      isOverdue: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_overdue' },
+      reminderYellow: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 2, field: 'reminder_yellow' },
+      reminderRed: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 1, field: 'reminder_red' },
+      images: { type: DataTypes.TEXT, allowNull: false, defaultValue: '[]' },
+      createdBy: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'created_by' }
+    },
+    { sequelize, modelName: 'tasks', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: 'updatedAt' }
+  )
+
+  TaskAssignmentModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      taskId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'task_id' },
+      userId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'user_id' },
+      content: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      status: { type: DataTypes.ENUM('created', 'in_progress', 'completed'), allowNull: false, defaultValue: 'created' },
+      completedAt: { type: DataTypes.DATE(3), allowNull: true, field: 'completed_at' }
+    },
+    { sequelize, modelName: 'task_assignments', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
+  TaskCommentModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      taskId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'task_id' },
+      userId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'user_id' },
+      content: { type: DataTypes.TEXT, allowNull: false }
+    },
+    { sequelize, modelName: 'task_comments', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
+  TaskIssueModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      taskId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'task_id' },
+      userId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'user_id' },
+      title: { type: DataTypes.STRING(128), allowNull: false },
+      content: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      status: { type: DataTypes.ENUM('open', 'resolved'), allowNull: false, defaultValue: 'open' },
+      resolvedAt: { type: DataTypes.DATE(3), allowNull: true, field: 'resolved_at' }
+    },
+    { sequelize, modelName: 'task_issues', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
+  TaskStatusLogModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      taskId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'task_id' },
+      userId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'user_id' },
+      fromStatus: { type: DataTypes.STRING(32), allowNull: false, defaultValue: '', field: 'from_status' },
+      toStatus: { type: DataTypes.ENUM('created', 'in_progress', 'completed', 'pending_extension', 'extended', 'overdue'), allowNull: false, field: 'to_status' },
+      note: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' }
+    },
+    { sequelize, modelName: 'task_status_logs', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
+  TaskExtensionModel.init(
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      taskId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'task_id' },
+      userId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'user_id' },
+      requestedDueTime: { type: DataTypes.DATE(3), allowNull: false, field: 'requested_due_time' },
+      reason: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+      status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), allowNull: false, defaultValue: 'pending' },
+      decidedBy: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'decided_by' },
+      decidedAt: { type: DataTypes.DATE(3), allowNull: true, field: 'decided_at' }
+    },
+    { sequelize, modelName: 'task_extensions', timestamps: true, underscored: true, createdAt: 'createdAt', updatedAt: false }
+  )
+
+
   // 关联（映射表关系，供 join 查询使用）
   MailConfigModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
   CompanyModel.belongsTo(UserModel, { as: 'owner', foreignKey: 'ownerId' })
@@ -396,4 +588,23 @@ export function initModels(sequelize: Sequelize): void {
   CompanyInvitationModel.belongsTo(UserModel, { as: 'user', foreignKey: 'userId' })
   CompanyInvitationModel.belongsTo(UserModel, { as: 'inviter', foreignKey: 'invitedBy' })
   CompanyInvitationModel.belongsTo(DepartmentModel, { foreignKey: 'departmentId' })
+
+  ProjectModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
+  ProjectModel.belongsTo(UserModel, { as: 'pm', foreignKey: 'pmId' })
+  ProjectMemberModel.belongsTo(ProjectModel, { foreignKey: 'projectId' })
+  ProjectMemberModel.belongsTo(UserModel, { foreignKey: 'userId' })
+
+  TaskModel.belongsTo(CompanyModel, { foreignKey: 'companyId' })
+  TaskModel.belongsTo(ProjectModel, { foreignKey: 'projectId' })
+  TaskModel.belongsTo(UserModel, { as: 'creator', foreignKey: 'createdBy' })
+  TaskAssignmentModel.belongsTo(TaskModel, { foreignKey: 'taskId' })
+  TaskAssignmentModel.belongsTo(UserModel, { foreignKey: 'userId' })
+  TaskCommentModel.belongsTo(TaskModel, { foreignKey: 'taskId' })
+  TaskCommentModel.belongsTo(UserModel, { foreignKey: 'userId' })
+  TaskIssueModel.belongsTo(TaskModel, { foreignKey: 'taskId' })
+  TaskIssueModel.belongsTo(UserModel, { foreignKey: 'userId' })
+  TaskStatusLogModel.belongsTo(TaskModel, { foreignKey: 'taskId' })
+  TaskStatusLogModel.belongsTo(UserModel, { foreignKey: 'userId' })
+  TaskExtensionModel.belongsTo(TaskModel, { foreignKey: 'taskId' })
+  TaskExtensionModel.belongsTo(UserModel, { foreignKey: 'userId' })
 }

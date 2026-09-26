@@ -23,7 +23,18 @@ import type {
   Membership,
   MailConfig,
   Session,
-  User
+  User,
+  Project,
+  ProjectMember,
+  ProjectRole,
+  TaskItem,
+  TaskAssignment,
+  TaskComment,
+  TaskIssue,
+  TaskExtension,
+  TaskStatus,
+  AssignmentStatus,
+  TaskDetail
 } from '../types'
 
 /** 带密码散列的用户记录（仅内部使用） */
@@ -190,4 +201,36 @@ export interface Store {
   saveHoliday(input: { date: string; name: string; type: HolidayType }): Promise<Holiday>
   /** 删除某日期假期 */
   deleteHoliday(date: string): Promise<void>
+
+  // ---- 任务流程系统（项目 / 任务 / 分配 / 留言 / 问题 / 延期 / 状态日志） ----
+  createProject(input: { companyId: number; name: string; pmId: number }): Promise<Project>
+  listProjects(companyId: number): Promise<Project[]>
+  deleteProject(projectId: number): Promise<void>
+  /** 设置项目成员角色（PM 下发组长等） */
+  setProjectRole(projectId: number, userId: number, role: ProjectRole): Promise<void>
+  listProjectMembers(projectId: number): Promise<ProjectMember[]>
+
+  createTask(input: { companyId: number; projectId?: number | null; title: string; description?: string; startTime: string; dueTime: string; images?: string[]; createdBy: number }): Promise<TaskItem>
+  /** 列任务：按公司过滤（非本公司不显示）；projectId 给定则按项目过滤 */
+  listTasks(companyId: number, projectId?: number | null): Promise<TaskItem[]>
+  getTask(taskId: number): Promise<TaskItem | null>
+  getTaskDetail(taskId: number): Promise<TaskDetail | null>
+  updateTask(input: { id: number; title?: string; description?: string; startTime?: string; dueTime?: string; images?: string[] }): Promise<TaskItem | null>
+  deleteTask(taskId: number): Promise<void>
+  /** 变更任务状态（记录状态日志；延期后 extended 视为关闭超时） */
+  setTaskStatus(input: { taskId: number; status: TaskStatus; userId: number; note: string }): Promise<TaskItem | null>
+  updateTaskReminder(input: { taskId: number; reminderYellow: number; reminderRed: number }): Promise<TaskItem | null>
+
+  addAssignment(input: { taskId: number; userId: number; content: string }): Promise<TaskAssignment>
+  removeAssignment(id: number): Promise<void>
+  /** 执行人提交分配状态 */
+  setAssignmentStatus(input: { id: number; status: AssignmentStatus; userId: number }): Promise<TaskAssignment | null>
+
+  addTaskComment(input: { taskId: number; userId: number; content: string }): Promise<TaskComment>
+
+  addTaskIssue(input: { taskId: number; userId: number; title: string; content: string }): Promise<TaskIssue>
+  resolveTaskIssue(issueId: number): Promise<TaskIssue | null>
+
+  requestTaskExtension(input: { taskId: number; userId: number; requestedDueTime: string; reason: string }): Promise<TaskExtension>
+  decideTaskExtension(input: { extensionId: number; approved: boolean; decidedBy: number }): Promise<TaskExtension | null>
 }

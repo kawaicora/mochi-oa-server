@@ -859,8 +859,35 @@ export class MemoryStore implements Store {
     return h
   }
 
+
   async deleteHoliday(date: string): Promise<void> {
     const hit = [...this.holidays.values()].find((h) => h.date === date)
     if (hit) this.holidays.delete(hit.id)
   }
+
+  // ---- 任务流程系统（memory 存储不支持，仅满足 Store 接口） ----
+  private async _taskNotSupported(): Promise<never> {
+    throw new Error('任务流程系统仅支持 MySQL 存储')
+  }
+  createProject(): Promise<never> { return this._taskNotSupported() }
+  listProjects(): Promise<never> { return this._taskNotSupported() }
+  deleteProject(): Promise<never> { return this._taskNotSupported() }
+  setProjectRole(): Promise<never> { return this._taskNotSupported() }
+  listProjectMembers(): Promise<never> { return this._taskNotSupported() }
+  createTask(): Promise<never> { return this._taskNotSupported() }
+  listTasks(): Promise<never> { return this._taskNotSupported() }
+  getTask(): Promise<never> { return this._taskNotSupported() }
+  getTaskDetail(): Promise<never> { return this._taskNotSupported() }
+  updateTask(): Promise<never> { return this._taskNotSupported() }
+  deleteTask(): Promise<never> { return this._taskNotSupported() }
+  setTaskStatus(): Promise<never> { return this._taskNotSupported() }
+  updateTaskReminder(): Promise<never> { return this._taskNotSupported() }
+  addAssignment(): Promise<never> { return this._taskNotSupported() }
+  removeAssignment(): Promise<never> { return this._taskNotSupported() }
+  setAssignmentStatus(): Promise<never> { return this._taskNotSupported() }
+  addTaskComment(): Promise<never> { return this._taskNotSupported() }
+  addTaskIssue(): Promise<never> { return this._taskNotSupported() }
+  resolveTaskIssue(): Promise<never> { return this._taskNotSupported() }
+  requestTaskExtension(): Promise<never> { return this._taskNotSupported() }
+  decideTaskExtension(): Promise<never> { return this._taskNotSupported() }
 }

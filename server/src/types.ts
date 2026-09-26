@@ -262,6 +262,132 @@ export interface MailConfig {
   createdAt: string
 }
 
+// ==================== 任务流程系统（项目 / 任务 / 分配 / 留言 / 问题 / 延期 / 状态日志） ====================
+
+/** 任务状态：已创建 / 正在进行 / 已完成 / 申请延期 / 已延期 / 已超时 */
+export type TaskStatus = 'created' | 'in_progress' | 'completed' | 'pending_extension' | 'extended' | 'overdue'
+/** 项目内角色：pm=项目负责人，leader=组长（PM 下放权限），member=普通成员 */
+export type ProjectRole = 'pm' | 'leader' | 'member'
+/** 分配（子任务）状态 */
+export type AssignmentStatus = 'created' | 'in_progress' | 'completed'
+/** 任务问题（QA）状态 */
+export type IssueStatus = 'open' | 'resolved'
+/** 延期申请状态 */
+export type ExtensionStatus = 'pending' | 'approved' | 'rejected'
+
+export interface Project {
+  id: number
+  companyId: number
+  name: string
+  /** 项目负责人（PM）userId */
+  pmId: number
+  createdAt: string
+}
+
+export interface ProjectMember {
+  projectId: number
+  userId: number
+  role: ProjectRole
+  joinedAt: string
+}
+
+export interface TaskItem {
+  id: number
+  companyId: number
+  projectId: number | null
+  title: string
+  description: string
+  /** ISO 时间 */
+  startTime: string
+  dueTime: string
+  completedTime: string | null
+  status: TaskStatus
+  isOverdue: boolean
+  /** 剩余天数阈值：≤该天数标黄 / 标红 */
+  reminderYellow: number
+  reminderRed: number
+  /** 任务图片（上传文件 url） */
+  images: string[]
+  createdBy: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TaskAssignment {
+  id: number
+  taskId: number
+  userId: number
+  /** 该执行人要做的内容 */
+  content: string
+  status: AssignmentStatus
+  completedAt: string | null
+  username?: string
+  nick?: string
+  avatar?: string
+}
+
+export interface TaskComment {
+  id: number
+  taskId: number
+  userId: number
+  content: string
+  createdAt: string
+  username?: string
+  nick?: string
+  avatar?: string
+}
+
+export interface TaskIssue {
+  id: number
+  taskId: number
+  userId: number
+  title: string
+  content: string
+  status: IssueStatus
+  resolvedAt: string | null
+  createdAt: string
+  username?: string
+  nick?: string
+  avatar?: string
+}
+
+export interface TaskStatusLog {
+  id: number
+  taskId: number
+  userId: number
+  fromStatus: string
+  toStatus: TaskStatus
+  /** 状态变更说明 */
+  note: string
+  createdAt: string
+  username?: string
+  nick?: string
+}
+
+export interface TaskExtension {
+  id: number
+  taskId: number
+  userId: number
+  requestedDueTime: string
+  reason: string
+  status: ExtensionStatus
+  decidedBy: number | null
+  decidedAt: string | null
+  createdAt: string
+  username?: string
+  nick?: string
+}
+
+/** 任务详情：任务 + 分配 + 留言 + 问题 + 延期 + 状态日志 */
+export interface TaskDetail {
+  task: TaskItem
+  assignments: TaskAssignment[]
+  comments: TaskComment[]
+  issues: TaskIssue[]
+  extensions: TaskExtension[]
+  logs: TaskStatusLog[]
+}
+
 // ==================== 假期（全局日历：法定/调休/自定义，可增删改同步） ====================
 
 /** 假期/工作日标记类型：legal=法定假期，workday=周末调休补班，custom=自定义 */

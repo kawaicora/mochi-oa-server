@@ -24,7 +24,21 @@ import type {
   MemberProfile,
   Membership,
   Session,
-  User
+  User,
+  Project,
+  ProjectMember,
+  ProjectRole,
+  TaskItem,
+  TaskAssignment,
+  TaskComment,
+  TaskIssue,
+  TaskStatusLog,
+  TaskExtension,
+  TaskStatus,
+  AssignmentStatus,
+  IssueStatus,
+  ExtensionStatus,
+  TaskDetail
 } from '../types'
 import { AlreadyExistsError, NotFoundError, type Store, type UserWithPassword } from './store'
 import {
@@ -43,7 +57,15 @@ import {
   MailConfigModel,
   MemberProfileModel,
   MessageModel,
+  ProjectMemberModel,
+  ProjectModel,
   SessionModel,
+  TaskAssignmentModel,
+  TaskCommentModel,
+  TaskExtensionModel,
+  TaskIssueModel,
+  TaskModel,
+  TaskStatusLogModel,
   UserModel,
   initModels
 } from './models'
@@ -980,7 +1002,269 @@ export class MySqlStore implements Store {
     return this.toHoliday(m)
   }
 
+
   async deleteHoliday(date: string): Promise<void> {
     await HolidayModel.destroy({ where: { date } })
+  }
+
+  // ==================== 任务流程系统 ====================
+  private parseJson(v: string | null | undefined, fallback: unknown): unknown {
+    if (!v) return fallback
+    try {
+      return JSON.parse(v)
+    } catch {
+      return fallback
+    }
+  }
+
+  private toProject(m: ProjectModel): Project {
+    return { id: Number(m.id), companyId: Number(m.companyId), name: m.name, pmId: Number(m.pmId), createdAt: toIso(m.createdAt) }
+  }
+
+  private toTask(m: TaskModel): TaskItem {
+    const now = Date.now()
+    const due = Date.parse(toIso(m.dueTime))
+    const notDone = m.status !== 'completed' && m.status !== 'extended'
+    const overdue = notDone && !Number.isNaN(due) && due <= now
+    const status = overdue ? 'overdue' : (m.status as TaskStatus)
+    return {
+      id: Number(m.id),
+      companyId: Number(m.companyId),
+      projectId: m.projectId === null ? null : Number(m.projectId),
+      title: m.title,
+      description: m.description ?? '',
+      startTime: toIso(m.startTime),
+      dueTime: toIso(m.dueTime),
+      completedTime: m.completedTime ? toIso(m.completedTime) : null,
+      status,
+      isOverdue: overdue,
+      reminderYellow: Number(m.reminderYellow ?? 2),
+      reminderRed: Number(m.reminderRed ?? 1),
+      images: (this.parseJson(m.images, []) as string[]) ?? [],
+      createdBy: Number(m.createdBy),
+      createdAt: toIso(m.createdAt),
+      updatedAt: toIso(m.updatedAt)
+    }
+  }
+
+  private toAssignment(m: TaskAssignmentModel): TaskAssignment {
+    return {
+      id: Number(m.id),
+      taskId: Number(m.taskId),
+      userId: Number(m.userId),
+      content: m.content ?? '',
+      status: m.status as AssignmentStatus,
+      completedAt: m.completedAt ? toIso(m.completedAt) : null
+    }
+  }
+
+  private toComment(m: TaskCommentModel): TaskComment {
+    return { id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId), content: m.content, createdAt: toIso(m.createdAt) }
+  }
+
+  private toIssue(m: TaskIssueModel): TaskIssue {
+    return {
+      id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId), title: m.title,
+      content: m.content ?? '', status: m.status as IssueStatus,
+      resolvedAt: m.resolvedAt ? toIso(m.resolvedAt) : null, createdAt: toIso(m.createdAt)
+    }
+  }
+
+  private toLog(m: TaskStatusLogModel): TaskStatusLog {
+    return { id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId), fromStatus: m.fromStatus ?? '', toStatus: m.toStatus as TaskStatus, note: m.note ?? '', createdAt: toIso(m.createdAt) }
+  }
+
+  private toExtension(m: TaskExtensionModel): TaskExtension {
+    return {
+      id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId),
+      requestedDueTime: toIso(m.requestedDueTime), reason: m.reason ?? '',
+      status: m.status as ExtensionStatus, decidedBy: m.decidedBy === null ? null : Number(m.decidedBy),
+      decidedAt: m.decidedAt ? toIso(m.decidedAt) : null, createdAt: toIso(m.createdAt)
+    }
+  }
+
+  private async withUser<T extends { userId: number }>(rows: T[]): Promise<T[]> {
+    const ids = Array.from(new Set(rows.map((r) => r.userId)))
+    const users = await UserModel.findAll({ where: { id: { [Op.in]: ids } } })
+    const map = new Map(users.map((u) => [Number(u.id), { username: u.username, nick: u.nick, avatar: u.avatar }]))
+    return rows.map((r) => ({ ...r, ...(map.get(r.userId) ?? {}) }))
+  }
+
+  async createProject(input: { companyId: number; name: string; pmId: number }): Promise<Project> {
+    const m = await ProjectModel.create({ companyId: input.companyId, name: input.name, pmId: input.pmId })
+    await ProjectMemberModel.create({ projectId: Number(m.id), userId: input.pmId, role: 'pm' })
+    return this.toProject(m)
+  }
+
+  async listProjects(companyId: number): Promise<Project[]> {
+    const rows = await ProjectModel.findAll({ where: { companyId }, order: [['id', 'ASC']] })
+    return rows.map((m) => this.toProject(m))
+  }
+
+  async deleteProject(projectId: number): Promise<void> {
+    await ProjectMemberModel.destroy({ where: { projectId } })
+    await TaskModel.update({ projectId: null }, { where: { projectId } })
+    await ProjectModel.destroy({ where: { id: projectId } })
+  }
+
+  async setProjectRole(projectId: number, userId: number, role: ProjectRole): Promise<void> {
+    const existing = await ProjectMemberModel.findOne({ where: { projectId, userId } })
+    if (existing) await existing.update({ role })
+    else await ProjectMemberModel.create({ projectId, userId, role })
+  }
+
+  async listProjectMembers(projectId: number): Promise<ProjectMember[]> {
+    const rows = await ProjectMemberModel.findAll({ where: { projectId } })
+    return rows.map((m) => ({ projectId: Number(m.projectId), userId: Number(m.userId), role: m.role as ProjectRole, joinedAt: toIso(m.joinedAt) }))
+  }
+
+  async createTask(input: { companyId: number; projectId?: number | null; title: string; description?: string; startTime: string; dueTime: string; images?: string[]; createdBy: number }): Promise<TaskItem> {
+    const m = await TaskModel.create({
+      companyId: input.companyId,
+      projectId: input.projectId && input.projectId > 0 ? input.projectId : null,
+      title: input.title,
+      description: input.description ?? '',
+      startTime: new Date(input.startTime),
+      dueTime: new Date(input.dueTime),
+      images: JSON.stringify(input.images ?? []),
+      createdBy: input.createdBy,
+      status: 'created'
+    })
+    await TaskStatusLogModel.create({ taskId: Number(m.id), userId: input.createdBy, fromStatus: '', toStatus: 'created', note: '创建任务' })
+    return this.toTask(m)
+  }
+
+  async listTasks(companyId: number, projectId?: number | null): Promise<TaskItem[]> {
+    const where: Record<string, unknown> = { companyId }
+    if (projectId && projectId > 0) where.projectId = projectId
+    const rows = await TaskModel.findAll({ where, order: [['dueTime', 'ASC']] })
+    return rows.map((m) => this.toTask(m))
+  }
+
+  async getTask(taskId: number): Promise<TaskItem | null> {
+    const m = await TaskModel.findByPk(taskId)
+    return m ? this.toTask(m) : null
+  }
+
+  async getTaskDetail(taskId: number): Promise<TaskDetail | null> {
+    const t = await TaskModel.findByPk(taskId)
+    if (!t) return null
+    const [assignments, comments, issues, extensions, logs] = await Promise.all([
+      TaskAssignmentModel.findAll({ where: { taskId }, order: [['id', 'ASC']] }),
+      TaskCommentModel.findAll({ where: { taskId }, order: [['id', 'ASC']] }),
+      TaskIssueModel.findAll({ where: { taskId }, order: [['id', 'ASC']] }),
+      TaskExtensionModel.findAll({ where: { taskId }, order: [['id', 'ASC']] }),
+      TaskStatusLogModel.findAll({ where: { taskId }, order: [['id', 'ASC']] })
+    ])
+    return {
+      task: this.toTask(t),
+      assignments: await this.withUser(assignments.map((a) => this.toAssignment(a))),
+      comments: await this.withUser(comments.map((c) => this.toComment(c))),
+      issues: await this.withUser(issues.map((i) => this.toIssue(i))),
+      extensions: await this.withUser(extensions.map((e) => this.toExtension(e))),
+      logs: await this.withUser(logs.map((l) => this.toLog(l)))
+    }
+  }
+
+  async updateTask(input: { id: number; title?: string; description?: string; startTime?: string; dueTime?: string; images?: string[] }): Promise<TaskItem | null> {
+    const t = await TaskModel.findByPk(input.id)
+    if (!t) return null
+    const v: Record<string, unknown> = {}
+    if (input.title !== undefined) v.title = input.title
+    if (input.description !== undefined) v.description = input.description
+    if (input.startTime !== undefined) v.startTime = new Date(input.startTime)
+    if (input.dueTime !== undefined) v.dueTime = new Date(input.dueTime)
+    if (input.images !== undefined) v.images = JSON.stringify(input.images)
+    await t.update(v)
+    const m = await TaskModel.findByPk(input.id)
+    return this.toTask(m!)
+  }
+
+  async deleteTask(taskId: number): Promise<void> {
+    await TaskAssignmentModel.destroy({ where: { taskId } })
+    await TaskCommentModel.destroy({ where: { taskId } })
+    await TaskIssueModel.destroy({ where: { taskId } })
+    await TaskExtensionModel.destroy({ where: { taskId } })
+    await TaskStatusLogModel.destroy({ where: { taskId } })
+    await TaskModel.destroy({ where: { id: taskId } })
+  }
+
+  async setTaskStatus(input: { taskId: number; status: TaskStatus; userId: number; note: string }): Promise<TaskItem | null> {
+    const t = await TaskModel.findByPk(input.taskId)
+    if (!t) return null
+    const old = t.status as TaskStatus
+    const v: Record<string, unknown> = { status: input.status }
+    if (input.status === 'completed') v.completedTime = new Date()
+    if (input.status === 'extended') v.isOverdue = false // 延期后关闭超时
+    await t.update(v)
+    await TaskStatusLogModel.create({ taskId: input.taskId, userId: input.userId, fromStatus: old, toStatus: input.status, note: input.note ?? '' })
+    const m = await TaskModel.findByPk(input.taskId)
+    return this.toTask(m!)
+  }
+
+  async updateTaskReminder(input: { taskId: number; reminderYellow: number; reminderRed: number }): Promise<TaskItem | null> {
+    const t = await TaskModel.findByPk(input.taskId)
+    if (!t) return null
+    await t.update({ reminderYellow: input.reminderYellow, reminderRed: input.reminderRed })
+    const m = await TaskModel.findByPk(input.taskId)
+    return this.toTask(m!)
+  }
+
+  async addAssignment(input: { taskId: number; userId: number; content: string }): Promise<TaskAssignment> {
+    const m = await TaskAssignmentModel.create({ taskId: input.taskId, userId: input.userId, content: input.content, status: 'created' })
+    return this.toAssignment(m)
+  }
+
+  async removeAssignment(id: number): Promise<void> {
+    await TaskAssignmentModel.destroy({ where: { id } })
+  }
+
+  async setAssignmentStatus(input: { id: number; status: AssignmentStatus; userId: number }): Promise<TaskAssignment | null> {
+    const a = await TaskAssignmentModel.findByPk(input.id)
+    if (!a) return null
+    if (Number(a.userId) !== input.userId) return null // 仅本人可提交
+    const v: Record<string, unknown> = { status: input.status }
+    if (input.status === 'completed') v.completedAt = new Date()
+    else v.completedAt = null
+    await a.update(v)
+    const m = await TaskAssignmentModel.findByPk(input.id)
+    return this.toAssignment(m!)
+  }
+
+  async addTaskComment(input: { taskId: number; userId: number; content: string }): Promise<TaskComment> {
+    const m = await TaskCommentModel.create({ taskId: input.taskId, userId: input.userId, content: input.content })
+    return this.toComment(m)
+  }
+
+  async addTaskIssue(input: { taskId: number; userId: number; title: string; content: string }): Promise<TaskIssue> {
+    const m = await TaskIssueModel.create({ taskId: input.taskId, userId: input.userId, title: input.title, content: input.content, status: 'open' })
+    return this.toIssue(m)
+  }
+
+  async resolveTaskIssue(issueId: number): Promise<TaskIssue | null> {
+    const i = await TaskIssueModel.findByPk(issueId)
+    if (!i) return null
+    await i.update({ status: 'resolved', resolvedAt: new Date() })
+    const m = await TaskIssueModel.findByPk(issueId)
+    return this.toIssue(m!)
+  }
+
+  async requestTaskExtension(input: { taskId: number; userId: number; requestedDueTime: string; reason: string }): Promise<TaskExtension> {
+    const m = await TaskExtensionModel.create({ taskId: input.taskId, userId: input.userId, requestedDueTime: new Date(input.requestedDueTime), reason: input.reason, status: 'pending' })
+    await TaskModel.update({ status: 'pending_extension' }, { where: { id: input.taskId } })
+    await TaskStatusLogModel.create({ taskId: input.taskId, userId: input.userId, fromStatus: 'in_progress', toStatus: 'pending_extension', note: '申请延期：' + input.reason })
+    return this.toExtension(m)
+  }
+
+  async decideTaskExtension(input: { extensionId: number; approved: boolean; decidedBy: number }): Promise<TaskExtension | null> {
+    const e = await TaskExtensionModel.findByPk(input.extensionId)
+    if (!e) return null
+    await e.update({ status: input.approved ? 'approved' : 'rejected', decidedBy: input.decidedBy, decidedAt: new Date() })
+    if (input.approved) {
+      await TaskModel.update({ dueTime: new Date(e.requestedDueTime), status: 'extended', isOverdue: false }, { where: { id: Number(e.taskId) } })
+      await TaskStatusLogModel.create({ taskId: Number(e.taskId), userId: input.decidedBy, fromStatus: 'pending_extension', toStatus: 'extended', note: '审批通过延期申请' })
+    }
+    const m = await TaskExtensionModel.findByPk(input.extensionId)
+    return this.toExtension(m!)
   }
 }
