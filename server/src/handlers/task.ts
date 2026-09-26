@@ -164,16 +164,21 @@ export function registerTaskHandlers(ctx: Ctx): void {
       if (!title) return ack(fail('任务名称不能为空'))
       if (!startTime || !dueTime) return ack(fail('开始/预期结束时间不能为空'))
       if (Date.parse(dueTime) < Date.parse(startTime)) return ack(fail('预期结束时间不能早于开始时间'))
-      const task = await store.createTask({ companyId, projectId, title, description, startTime, dueTime, images, createdBy: auth.id })
-      if (Array.isArray(d.assignments)) {
-        for (const a of d.assignments) {
-          const o = (a ?? {}) as { userId?: unknown; content?: unknown }
-          const u = int(o.userId)
-          if (u > 0) await store.addAssignment({ taskId: task.id, userId: u, content: typeof o.content === 'string' ? o.content.trim().slice(0, 500) : '' })
+      try {
+        const task = await store.createTask({ companyId, projectId, title, description, startTime, dueTime, images, createdBy: auth.id })
+        if (Array.isArray(d.assignments)) {
+          for (const a of d.assignments) {
+            const o = (a ?? {}) as { userId?: unknown; content?: unknown }
+            const u = int(o.userId)
+            if (u > 0) await store.addAssignment({ taskId: task.id, userId: u, content: typeof o.content === 'string' ? o.content.trim().slice(0, 500) : '' })
+          }
         }
+        io.emit('task:tasksUpdated', { companyId })
+        ack(ok({ task }))
+      } catch (e) {
+        console.error('[task:create] error:', e)
+        ack(fail(e instanceof Error ? e.message : String(e)))
       }
-      io.emit('task:tasksUpdated', { companyId })
-      ack(ok({ task }))
     })
 
     socket.on('task:update', async (data: unknown, cb?: Ack) => {
