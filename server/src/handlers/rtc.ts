@@ -3,6 +3,7 @@ import type { ServerConfig, IceServer } from '../config'
 import type { Store } from '../db/store'
 import type { AuthUser } from './auth'
 import { fail, groupRoom, ok, userRoom } from '../util'
+import { getIceServers } from '../ice'
 
 export interface RtcCtx {
   io: Server
@@ -196,7 +197,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
         // 会议可以直接开始
         session.startedAt = Date.now()
         await addSocket(socket, meetingNo, u)
-        ack(ok({ meeting: view(session), scheduled: false, peers: peersInfo(meetingNo).filter((p) => p.socketId !== socket.id), iceServers: config.iceServers }))
+        ack(ok({ meeting: view(session), scheduled: false, peers: peersInfo(meetingNo).filter((p) => p.socketId !== socket.id), iceServers: await getIceServers(config) }))
       }
     })
 
@@ -237,7 +238,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
         ok({
           room: view(r),
           peers: peersInfo(roomId).filter((p) => p.socketId !== socket.id),
-          iceServers: config.iceServers as IceServer[],
+          iceServers: (await getIceServers(config)) as IceServer[],
           started: wasStarted
         })
       )
@@ -342,7 +343,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       if (d.accept === true) {
         await addSocket(socket, roomId, u)
         socket.to(rtcRoom(roomId)).emit('rtc:peerJoined', { room: roomId, peer: peerOf(socket) })
-        ack(ok({ room: view(r), peers: peersInfo(roomId).filter((p) => p.socketId !== socket.id), iceServers: config.iceServers as IceServer[] }))
+        ack(ok({ room: view(r), peers: peersInfo(roomId).filter((p) => p.socketId !== socket.id), iceServers: (await getIceServers(config)) as IceServer[] }))
       } else {
         socket.to(rtcRoom(roomId)).emit('rtc:dmRejected', { room: roomId, by: peerOf(socket) })
         ack(ok())
@@ -378,7 +379,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
         ok({
           room: view(r),
           peers: peersInfo(rtcId).filter((p) => p.socketId !== socket.id),
-          iceServers: config.iceServers as IceServer[]
+          iceServers: (await getIceServers(config)) as IceServer[]
         })
       )
     })
