@@ -228,6 +228,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const pinned = d.pinned === true || d.pinned === 1
       try {
         await store.setConversationPinned(conversationId, auth.id, pinned)
+        io.to(userRoom(auth.id)).emit('conversations:updated', { conversationId, pinned })
         ack(ok({ pinned }))
       } catch {
         ack(fail('不在该对话中'))
@@ -243,6 +244,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const conversationId = Number(d.conversationId)
       if (!Number.isInteger(conversationId) || conversationId <= 0) return ack(fail('参数不合法'))
       await store.markRead(conversationId, auth.id)
+      io.to(userRoom(auth.id)).emit('conversations:updated', { conversationId, unread: 0 })
       ack(ok())
     })
 

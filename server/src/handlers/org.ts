@@ -2,7 +2,7 @@ import type { Socket } from 'socket.io'
 import type { CompanyRole } from '../types'
 import { AlreadyExistsError } from '../db/store'
 import { hashPassword } from '../password'
-import { fail, makeJoinCode, ok } from '../util'
+import { companyRoom, fail, makeJoinCode, ok, userRoom } from '../util'
 import type { AuthUser, Ctx } from './auth'
 
 type Ack = (res: Record<string, unknown>) => void
@@ -221,6 +221,8 @@ export function registerOrgHandlers(ctx: Ctx): void {
           try {
             await store.addMember(companyId, userId, role)
             result.memberships++
+            io.to(userRoom(userId)).emit('company:added', { companyId })
+            io.to(companyRoom(companyId)).emit('company:updated', { companyId })
           } catch {
             result.errors.push(`第${idx + 2}行：加入公司「${companyName}」失败`)
           }
