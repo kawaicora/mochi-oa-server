@@ -100,9 +100,7 @@ function deviceLabel(socket: Socket, fromData?: unknown): string {
   return '未知设备'
 }
 
-/** 客户端上报的归属地 / 设备（登录、注册时随 data.clientInfo 传入）。
- *  注意：clientInfo.ip 是客户端自报、不可信（NAT/代理后可能是 127.0.0.1 / 网关 IP），
- *  登录/会话记录的 IP 一律用服务端 realIp() 从代理头 / TCP 源地址解析。 */
+/** 客户端上报的归属地 / 设备（登录、注册时随 data.clientInfo 传入）。 */
 function clientInfoFrom(data: unknown): { ip: string; location: string; device: string } {
   const d = (data ?? {}) as { clientInfo?: unknown }
   const ci = (d.clientInfo && typeof d.clientInfo === 'object' ? d.clientInfo : {}) as { ip?: unknown; location?: unknown; device?: unknown }
@@ -125,6 +123,14 @@ function realIp(socket: Socket): string {
   const real = Array.isArray(realRaw) ? realRaw[0] : typeof realRaw === 'string' ? realRaw : undefined
   if (real?.trim()) return real.trim().slice(0, 64)
   return socket.handshake.address
+}
+
+/** 会话记录的 IP：优先客户端自报的 IP（Docker/NAT 直连时服务端只能看到网关/内网地址，
+ *  客户端自报的公网/局域网 IP 才接近真实；非空且非环回即采用），否则回退 realIp() 解析。 */
+function resolveSessionIp(socket: Socket, clientIp: string): string {
+  const cip = (clientIp ?? '').trim().toLowerCase()
+  if (cip && cip !== '127.0.0.1' && cip !== '::1' && cip !== 'localhost') return cip.slice(0, 64)
+  return realIp(socket)
 }
 
 /** 会话对外视图（不含 tokenHash） */
@@ -327,7 +333,7 @@ export function registerAuthHandlers(ctx: Ctx): void {
           userId: user.id,
           tokenHash: hashToken(token),
           device: deviceLabel(socket, ci.device || d.device),
-          ip: realIp(socket),
+          ip: resolveSessionIp(socket, ci.ip),
           location: ci.location,
           expiresAt: await sessionExpiry(store, user.id, config)
         })
@@ -375,12 +381,11 @@ export function registerAuthHandlers(ctx: Ctx): void {
       const token = newSessionToken()
       const ci = clientInfoFrom(data)
       const device = deviceLabel(socket, ci.device || d.device)
-      const ip = realIp(socket)
       const session = await store.createSession({
         userId: user.id,
         tokenHash: hashToken(token),
         device,
-        ip,
+        ip: resolveSessionIp(socket, ci.ip),
         location: ci.location,
         expiresAt: await sessionExpiry(store, user.id, config)
       })
@@ -388,7 +393,7 @@ export function registerAuthHandlers(ctx: Ctx): void {
       await joinUserRooms(socket, store)
       addPresence(user.id, socket.id)
       await broadcastPresence(io, store, socket, true).catch(() => {})
-      await notifyOtherSessions(io, store, user.id, session.id, device, ip, ci.location)
+      await notifyOtherSessions(io, store, user.id, session.id, device, resolveSessionIp(socket, ci.ip), ci.location)
 
       const payload = await loginPayload(store, user, session)
       payload.token = token
