@@ -253,17 +253,19 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const ack = cb ?? (() => {})
       const auth = authed(socket)
       if (!auth) return ack(fail('未登录'))
-      const d = (data ?? {}) as { conversationId?: unknown; messageId?: unknown }
+      const d = (data ?? {}) as { conversationId?: unknown; messageId?: unknown; content?: unknown }
       const conversationId = Number(d.conversationId)
       const messageId = typeof d.messageId === 'string' ? d.messageId : ''
+      const content = typeof d.content === 'string' ? d.content.slice(0, 1000) : ''
       if (!Number.isInteger(conversationId) || conversationId <= 0 || messageId.length === 0) {
         return ack(fail('参数不合法'))
       }
       const conv = await store.getConversationById(conversationId)
       if (!conv) return ack(fail('对话不存在'))
       if ((await store.getConversationMember(conversationId, auth.id)) === null) return ack(fail('不在该对话中'))
-      const msg = await store.getMessage(conversationId, messageId)
-      // 本地临时消息（id 未落到服务端）视为已撤回，容忍——避免"消息不存在"导致客户端无法撤回
+      let msg = await store.getMessage(conversationId, messageId)
+      // 本地临时消息（id 未落到服务端）：按内容匹配本人最近消息软删，确保服务端真实消息也被撤回（deletedAt 被设置）
+      if (!msg && content) msg = await store.findOwnMessageByContent(conversationId, auth.id, content)
       if (!msg) return ack(ok())
       // 权限：本人可删自己的；公司管理员可删群内任意
       const own = msg.fromId === auth.id
@@ -273,8 +275,8 @@ export function registerConversationHandlers(ctx: Ctx): void {
         if (g) admin = await isCompanyAdmin(store, g.companyId, auth.id)
       }
       if (!own && !admin) return ack(fail('仅可删除自己的消息'))
-      if (!(await store.softDeleteMessage(conversationId, messageId))) return ack(fail('消息不存在或已删除'))
-      broadcastDeleted(io, conv, conversationId, messageId)
+      if (!(await store.softDeleteMessage(conversationId, msg.id))) return ack(fail('消息不存在或已删除'))
+      broadcastDeleted(io, conv, conversationId, msg.id)
       ack(ok())
     })
 

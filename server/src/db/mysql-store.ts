@@ -692,6 +692,13 @@ export class MySqlStore implements Store {
     return toMessage(m, type)
   }
 
+  async findOwnMessageByContent(conversationId: number, userId: number, content: string): Promise<ChatMessage | null> {
+    const m = await MessageModel.findOne({ where: { conversationId, fromId: userId, content, deletedAt: null }, order: [['created_at', 'DESC']] })
+    if (!m) return null
+    const type = await this.conversationType(conversationId)
+    return toMessage(m, type)
+  }
+
   async softDeleteMessage(conversationId: number, messageId: string): Promise<boolean> {
     const n = await MessageModel.update({ deletedAt: new Date() }, { where: { id: Number(messageId), conversationId, deletedAt: null } })
     return n[0] > 0

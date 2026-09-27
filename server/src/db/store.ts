@@ -141,6 +141,7 @@ export interface Store {
   /** 取单条消息（含已删除），删除前校验归属用 */
   getMessage(conversationId: number, messageId: string): Promise<ChatMessage | null>
   /** 软删除：客户端删除/清空只打 deletedAt 标记 */
+  findOwnMessageByContent(conversationId: number, userId: number, content: string): Promise<ChatMessage | null>
   softDeleteMessage(conversationId: number, messageId: string): Promise<boolean>
   /** 真正删除：仅管理员（公司 owner/admin） */
   hardDeleteMessage(conversationId: number, messageId: string): Promise<boolean>
