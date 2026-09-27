@@ -79,6 +79,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       })
       const taskIds = intArr(d.taskIds)
       if (taskIds.length) await store.linkRequirementTasks({ requirementId: requirement.id, taskIds, userId: auth.id, companyId })
+      io.emit('req:updated', { companyId, projectId: requirement.projectId })
       ack(ok({ requirement }))
     })
 
@@ -100,6 +101,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
         startTime: d.startTime !== undefined ? toIsoStr(d.startTime) || undefined : undefined,
         dueTime: d.dueTime !== undefined ? toIsoStr(d.dueTime) || undefined : undefined
       })
+      io.emit('req:updated', { companyId: req.companyId, projectId: req.projectId })
       ack(ok({ requirement: updated }))
     })
 
@@ -115,6 +117,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       const role = await memberRoleOf(store, req.companyId, auth.id)
       if (!isAdmin(role) && req.handlerId !== auth.id) return ack(fail('仅管理员或处理人可流转'))
       const updated = await store.setRequirementStatus({ requirementId: req.id, status, userId: auth.id })
+      io.emit('req:updated', { companyId: req.companyId, projectId: req.projectId })
       ack(ok({ requirement: updated }))
     })
 
@@ -126,6 +129,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!req) return ack(fail('需求不存在'))
       if (!isAdmin(await memberRoleOf(store, req.companyId, auth.id))) return ack(fail('仅管理员可删除'))
       await store.deleteRequirement(req.id)
+      io.emit('req:updated', { companyId: req.companyId, projectId: req.projectId })
       ack(ok({ ok: true }))
     })
 
@@ -139,6 +143,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!isAdmin(await memberRoleOf(store, req.companyId, auth.id))) return ack(fail('仅管理员可关联任务'))
       const taskIds = intArr(d.taskIds)
       const linked = await store.linkRequirementTasks({ requirementId: req.id, taskIds, userId: auth.id, companyId: req.companyId })
+      io.emit('req:updated', { companyId: req.companyId, projectId: req.projectId })
       ack(ok({ linkedTaskIds: linked }))
     })
 
@@ -167,6 +172,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
         severity: str(d.severity, 32) || undefined, priority: str(d.priority, 32) || undefined,
         handlerId: int(d.handlerId) || null, foundVersion: str(d.foundVersion, 64), creatorId: auth.id
       })
+      io.emit('bug:updated', { companyId, projectId: bug.projectId })
       ack(ok({ bug }))
     })
 
@@ -187,6 +193,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
         handlerId: d.handlerId !== undefined ? int(d.handlerId) || null : undefined,
         foundVersion: d.foundVersion !== undefined ? str(d.foundVersion, 64) : undefined
       })
+      io.emit('bug:updated', { companyId: bug.companyId, projectId: bug.projectId })
       ack(ok({ bug: updated }))
     })
 
@@ -202,6 +209,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       const role = await memberRoleOf(store, bug.companyId, auth.id)
       if (!isAdmin(role) && bug.handlerId !== auth.id) return ack(fail('仅管理员或处理人可流转'))
       const updated = await store.setBugStatus({ bugId: bug.id, status, userId: auth.id })
+      io.emit('bug:updated', { companyId: bug.companyId, projectId: bug.projectId })
       ack(ok({ bug: updated }))
     })
 
@@ -213,6 +221,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!bug) return ack(fail('缺陷不存在'))
       if (!isAdmin(await memberRoleOf(store, bug.companyId, auth.id))) return ack(fail('仅管理员可删除'))
       await store.deleteBug(bug.id)
+      io.emit('bug:updated', { companyId: bug.companyId, projectId: bug.projectId })
       ack(ok({ ok: true }))
     })
 
@@ -241,6 +250,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!st || !dt) return ack(fail('请填写开始与结束时间'))
       if (Date.parse(dt) < Date.parse(st)) return ack(fail('结束时间不能早于开始'))
       const plan = await store.createPlan({ companyId, projectId: int(d.projectId) || null, name, description: str(d.description, 8000), startTime: st, dueTime: dt, creatorId: auth.id })
+      io.emit('plan:updated', { companyId, projectId: plan.projectId })
       ack(ok({ plan }))
     })
 
@@ -264,6 +274,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
         dueTime: d.dueTime !== undefined ? toIsoStr(d.dueTime) || undefined : undefined,
         status: d.status !== undefined ? str(d.status, 32) : undefined
       })
+      io.emit('plan:updated', { companyId: target.companyId, projectId: target.projectId })
       ack(ok({ plan: updated }))
     })
 
@@ -277,6 +288,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!target) return ack(fail('计划不存在'))
       if (!isAdmin(await memberRoleOf(store, target.companyId, auth.id))) return ack(fail('仅管理员可删除'))
       await store.deletePlan(planId)
+      io.emit('plan:updated', { companyId: target.companyId, projectId: target.projectId })
       ack(ok({ ok: true }))
     })
 
@@ -301,6 +313,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       const title = str(d.title, 128)
       if (!title) return ack(fail('标题不能为空'))
       const doc = await store.createDocument({ companyId, projectId: int(d.projectId) || null, title, content: str(d.content, 100000), creatorId: auth.id })
+      io.emit('doc:updated', { companyId, projectId: doc.projectId })
       ack(ok({ doc }))
     })
 
@@ -315,6 +328,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!target) return ack(fail('文档不存在'))
       if (!isAdmin(await memberRoleOf(store, target.companyId, auth.id))) return ack(fail('仅管理员可编辑'))
       const updated = await store.updateDocument({ id: docId, title: d.title !== undefined ? str(d.title, 128) : undefined, content: d.content !== undefined ? str(d.content, 100000) : undefined })
+      io.emit('doc:updated', { companyId: target.companyId, projectId: target.projectId })
       ack(ok({ doc: updated }))
     })
 
@@ -328,6 +342,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!target) return ack(fail('文档不存在'))
       if (!isAdmin(await memberRoleOf(store, target.companyId, auth.id))) return ack(fail('仅管理员可删除'))
       await store.deleteDocument(docId)
+      io.emit('doc:updated', { companyId: target.companyId, projectId: target.projectId })
       ack(ok({ ok: true }))
     })
 
@@ -352,6 +367,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       const title = str(d.title, 128)
       if (!title) return ack(fail('标题不能为空'))
       const page = await store.createWikiPage({ companyId, projectId: int(d.projectId) || null, title, content: str(d.content, 100000), creatorId: auth.id })
+      io.emit('wiki:updated', { companyId, projectId: page.projectId })
       ack(ok({ page }))
     })
 
@@ -366,6 +382,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!target) return ack(fail('Wiki 页面不存在'))
       if (!isAdmin(await memberRoleOf(store, target.companyId, auth.id))) return ack(fail('仅管理员可编辑'))
       const updated = await store.updateWikiPage({ id: wikiId, title: d.title !== undefined ? str(d.title, 128) : undefined, content: d.content !== undefined ? str(d.content, 100000) : undefined })
+      io.emit('wiki:updated', { companyId: target.companyId, projectId: target.projectId })
       ack(ok({ page: updated }))
     })
 
@@ -379,6 +396,7 @@ export function registerProjectMgmtHandlers(ctx: Ctx): void {
       if (!target) return ack(fail('Wiki 页面不存在'))
       if (!isAdmin(await memberRoleOf(store, target.companyId, auth.id))) return ack(fail('仅管理员可删除'))
       await store.deleteWikiPage(wikiId)
+      io.emit('wiki:updated', { companyId: target.companyId, projectId: target.projectId })
       ack(ok({ ok: true }))
     })
 
