@@ -526,6 +526,14 @@ export class MemoryStore implements Store {
     return arr.find((m) => m.fromId === userId && m.content === content && !this.deletedMessages.has(this.dkey(conversationId, m.id))) ?? null
   }
 
+  async findOwnMessageByContentGlobal(userId: number, content: string): Promise<ChatMessage | null> {
+    for (const [cid, arr] of this.messagesByConv) {
+      const m = arr.find((x) => x.fromId === userId && x.content === content && !this.deletedMessages.has(this.dkey(cid, x.id)))
+      if (m) return m
+    }
+    return null
+  }
+
   async softDeleteMessage(conversationId: number, messageId: string): Promise<boolean> {
     const key = this.dkey(conversationId, messageId)
     if (this.deletedMessages.has(key)) return false

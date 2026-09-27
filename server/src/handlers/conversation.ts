@@ -264,8 +264,9 @@ export function registerConversationHandlers(ctx: Ctx): void {
       if (!conv) return ack(fail('对话不存在'))
       if ((await store.getConversationMember(conversationId, auth.id)) === null) return ack(fail('不在该对话中'))
       let msg = await store.getMessage(conversationId, messageId)
-      // 本地临时消息（id 未落到服务端）：按内容匹配本人最近消息软删，确保服务端真实消息也被撤回（deletedAt 被设置）
+      // 本地临时消息 / 旧消息（id 或会话未匹配）：按内容匹配本人最近消息软删，确保服务端真实消息也被撤回（deletedAt 被设置）
       if (!msg && content) msg = await store.findOwnMessageByContent(conversationId, auth.id, content)
+      if (!msg && content) msg = await store.findOwnMessageByContentGlobal(auth.id, content)
       if (!msg) return ack(ok())
       // 权限：本人可删自己的；公司管理员可删群内任意
       const own = msg.fromId === auth.id
