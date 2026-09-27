@@ -240,10 +240,23 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const ack = cb ?? (() => {})
       const auth = authed(socket)
       if (!auth) return ack(fail('未登录'))
-      const d = (data ?? {}) as { conversationId?: unknown }
+      const d = (data ?? {}) as { conversationId?: unknown; lastMessageId?: unknown }
       const conversationId = Number(d.conversationId)
       if (!Number.isInteger(conversationId) || conversationId <= 0) return ack(fail('参数不合法'))
-      await store.markRead(conversationId, auth.id)
+      const lastRaw = d.lastMessageId === undefined ? null : Number(d.lastMessageId)
+      const lastReadMessageId = lastRaw !== null && Number.isFinite(lastRaw) && lastRaw > 0 ? lastRaw : null
+      await store.markRead(conversationId, auth.id, lastReadMessageId)
+      // 已读回执广播：通知会话内其他成员"我读到了 lastReadMessageId"
+      const conv = await store.getConversationById(conversationId)
+      const rc = { conversationId, userId: auth.id, lastReadMessageId }
+      if (conv) {
+        if (conv.type === 'group' && conv.groupId) {
+          io.to(groupRoom(conv.groupId)).except(socket.id).emit('chat:readReceipt', rc)
+        } else if (conv.dmUserA !== null && conv.dmUserB !== null) {
+          io.to(userRoom(Number(conv.dmUserA))).except(socket.id).emit('chat:readReceipt', rc)
+          io.to(userRoom(Number(conv.dmUserB))).except(socket.id).emit('chat:readReceipt', rc)
+        }
+      }
       io.to(userRoom(auth.id)).emit('conversations:updated', { conversationId, unread: 0 })
       ack(ok())
     })

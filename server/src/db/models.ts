@@ -81,6 +81,7 @@ export class ConversationMemberModel extends Model {
   declare lastMessageAt: string | null
   declare lastPreview: string | null
   declare unread: number
+  declare lastReadMessageId: number | null
 }
 
 export class MessageModel extends Model {
@@ -445,7 +446,8 @@ export function initModels(sequelize: Sequelize): void {
       pinned: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       lastMessageAt: { type: DataTypes.DATE(3), allowNull: true, field: 'last_message_at' },
       lastPreview: { type: DataTypes.STRING(255), allowNull: true, field: 'last_preview' },
-      unread: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 }
+      unread: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+      lastReadMessageId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'last_read_message_id' }
     },
     { sequelize, modelName: 'conversation_members', timestamps: false }
   )

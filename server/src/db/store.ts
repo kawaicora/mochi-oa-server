@@ -148,8 +148,10 @@ export interface Store {
   hardDeleteMessage(conversationId: number, messageId: string): Promise<boolean>
   /** 更新某会话成员的 最新消息/预览/未读（fromId 除外） */
   touchConversation(conversationId: number, userId: number, preview: string, fromId?: number): Promise<void>
-  /** 清除未读 */
-  markRead(conversationId: number, userId: number): Promise<void>
+  /** 清除未读 + 记录已读位置（lastReadMessageId 为该成员已读到的最大消息 id） */
+  markRead(conversationId: number, userId: number, lastReadMessageId?: number | null): Promise<void>
+  /** 会话内各成员已读位置（已读回执） */
+  getReadReceipts(conversationId: number): Promise<{ userId: number; lastReadMessageId: number | null }[]>
 
   // ---- 文件（UUID 表） ----
   saveFile(input: { uuid: string; filename: string; mime: string; size: number; storage: 'local'; url: string }): Promise<FileRecord>

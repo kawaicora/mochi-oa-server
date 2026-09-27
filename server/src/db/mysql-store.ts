@@ -234,6 +234,10 @@ export class MySqlStore implements Store {
     if (this.opts.autoSchema ?? true) {
       // 由 ORM 模型自动建表，无手写 SQL
       await this.sequelize.sync()
+      // 已读回执：为已存在的 conversation_members 补 last_read_message_id 列（幂等，兼容老库）
+      await this.sequelize
+        .query('ALTER TABLE `conversation_members` ADD COLUMN IF NOT EXISTS `last_read_message_id` BIGINT UNSIGNED NULL AFTER `unread`')
+        .catch(() => {})
     }
   }
 
@@ -659,7 +663,8 @@ export class MySqlStore implements Store {
         pinned: m.pinned,
         lastMessageAt: m.lastMessageAt ? toIso(m.lastMessageAt) : null,
         lastPreview: m.lastPreview,
-        unread: m.unread
+        unread: m.unread,
+        readReceipts: await this.getReadReceipts(Number(m.conversationId))
       })
     }
     return out
@@ -723,8 +728,15 @@ export class MySqlStore implements Store {
     await ConversationMemberModel.update(data, { where })
   }
 
-  async markRead(conversationId: number, userId: number): Promise<void> {
-    await ConversationMemberModel.update({ unread: 0 }, { where: { conversationId, userId } })
+  async markRead(conversationId: number, userId: number, lastReadMessageId?: number | null): Promise<void> {
+    const data: Record<string, unknown> = { unread: 0 }
+    if (lastReadMessageId !== null && lastReadMessageId !== undefined && lastReadMessageId > 0) data.lastReadMessageId = lastReadMessageId
+    await ConversationMemberModel.update(data, { where: { conversationId, userId } })
+  }
+
+  async getReadReceipts(conversationId: number): Promise<{ userId: number; lastReadMessageId: number | null }[]> {
+    const rows = await ConversationMemberModel.findAll({ where: { conversationId }, attributes: ['userId', 'lastReadMessageId'] })
+    return rows.map((r) => ({ userId: Number(r.userId), lastReadMessageId: r.lastReadMessageId ? Number(r.lastReadMessageId) : null }))
   }
 
   // ---- 文件（UUID 表） ----

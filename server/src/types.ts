@@ -132,6 +132,8 @@ export interface ConversationItem {
   lastMessageAt: string | null
   lastPreview: string | null
   unread: number
+  /** 会话内各成员已读位置（已读回执） */
+  readReceipts: { userId: number; lastReadMessageId: number | null }[]
 }
 
 /** 消息 */

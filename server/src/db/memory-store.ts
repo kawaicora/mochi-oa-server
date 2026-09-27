@@ -38,6 +38,7 @@ export class MemoryStore implements Store {
   private groupMembers = new Map<string, { groupId: number; userId: number; role: GroupRole; joinedAt: string; mutedUntil: string | null }>()
   private conversations = new Map<number, Conversation>()
   private conversationMembers = new Map<string, ConversationMember>()
+  private readPositions = new Map<string, number>()
   private messagesByConv = new Map<number, ChatMessage[]>()
   private deletedMessages = new Set<string>()
   private files = new Map<string, FileRecord>()
@@ -479,7 +480,8 @@ export class MemoryStore implements Store {
         pinned: m.pinned,
         lastMessageAt: m.lastMessageAt,
         lastPreview: m.lastPreview,
-        unread: m.unread
+        unread: m.unread,
+        readReceipts: await this.getReadReceipts(c.id)
       })
     }
     out.sort((a, b) => {
@@ -559,9 +561,21 @@ export class MemoryStore implements Store {
     if (fromId !== undefined && fromId !== userId) m.unread += 1
   }
 
-  async markRead(conversationId: number, userId: number): Promise<void> {
+  async markRead(conversationId: number, userId: number, lastReadMessageId?: number | null): Promise<void> {
     const m = this.conversationMembers.get(this.mkey(conversationId, userId))
     if (m) m.unread = 0
+    if (lastReadMessageId !== null && lastReadMessageId !== undefined && lastReadMessageId > 0) {
+      this.readPositions.set(this.mkey(conversationId, userId), lastReadMessageId)
+    }
+  }
+
+  async getReadReceipts(conversationId: number): Promise<{ userId: number; lastReadMessageId: number | null }[]> {
+    const out: { userId: number; lastReadMessageId: number | null }[] = []
+    for (const [k, m] of this.conversationMembers) {
+      if (m.conversationId !== conversationId) continue
+      out.push({ userId: m.userId, lastReadMessageId: this.readPositions.get(k) ?? null })
+    }
+    return out
   }
 
   // ---- 文件（UUID 表） ----
