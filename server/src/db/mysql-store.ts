@@ -31,6 +31,7 @@ import type {
   TaskItem,
   TaskAssignment,
   TaskComment,
+  TaskAttachment,
   TaskIssue,
   TaskStatusLog,
   TaskExtension,
@@ -105,11 +106,19 @@ const toIso = (v: unknown): string => {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
-const parseImages = (raw: unknown): string[] => {
+const parseAttachments = (raw: unknown): TaskAttachment[] => {
   if (typeof raw !== 'string' || !raw) return []
   try {
     const arr = JSON.parse(raw)
-    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string').slice(0, 9) : []
+    if (!Array.isArray(arr)) return []
+    return arr.slice(0, 9).map((x): TaskAttachment | null => {
+      if (typeof x === 'string') return { kind: 'image', url: x, name: '' }
+      const o = x && typeof x === 'object' ? (x as Record<string, unknown>) : {}
+      const url = typeof o.url === 'string' && o.url.trim() ? o.url.trim() : ''
+      if (!url) return null
+      const kind = ['image', 'video', 'audio', 'folder', 'file'].includes(String(o.kind)) ? (String(o.kind) as TaskAttachment['kind']) : 'file'
+      return { kind, url, name: typeof o.name === 'string' ? o.name.slice(0, 255) : '' }
+    }).filter((x): x is TaskAttachment => x !== null)
   } catch { return [] }
 }
 
@@ -1087,7 +1096,7 @@ export class MySqlStore implements Store {
   }
 
   private toComment(m: TaskCommentModel): TaskComment {
-    return { id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId), content: m.content, images: parseImages(m.images), createdAt: toIso(m.createdAt) }
+    return { id: Number(m.id), taskId: Number(m.taskId), userId: Number(m.userId), content: m.content, attachments: parseAttachments(m.images), createdAt: toIso(m.createdAt) }
   }
 
   private toIssue(m: TaskIssueModel): TaskIssue {
@@ -1344,8 +1353,8 @@ export class MySqlStore implements Store {
     return this.toAssignment(m!)
   }
 
-  async addTaskComment(input: { taskId: number; userId: number; content: string; images?: string[] }): Promise<TaskComment> {
-    const m = await TaskCommentModel.create({ taskId: input.taskId, userId: input.userId, content: input.content, images: JSON.stringify(input.images ?? []) })
+  async addTaskComment(input: { taskId: number; userId: number; content: string; attachments?: TaskAttachment[] }): Promise<TaskComment> {
+    const m = await TaskCommentModel.create({ taskId: input.taskId, userId: input.userId, content: input.content, images: JSON.stringify(input.attachments ?? []) })
     return this.toComment(m)
   }
 

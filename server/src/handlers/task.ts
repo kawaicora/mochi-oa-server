@@ -2,7 +2,7 @@ import type { Socket } from 'socket.io'
 import { ok, fail } from '../util'
 import type { Ctx } from './auth'
 import type { Store } from '../db/store'
-import type { TaskStatus, ProjectRole, AssignmentStatus, CompanyRole } from '../types'
+import type { TaskStatus, ProjectRole, AssignmentStatus, CompanyRole, TaskAttachment } from '../types'
 
 type Ack = (res: Record<string, unknown>) => void
 
@@ -316,15 +316,26 @@ export function registerTaskHandlers(ctx: Ctx): void {
       const ack = cb ?? (() => {})
       const auth = authed(socket)
       if (!auth) return ack(fail('未登录'))
-      const d = (data ?? {}) as { taskId?: unknown; content?: unknown; images?: unknown }
+      const d = (data ?? {}) as { taskId?: unknown; content?: unknown; images?: unknown; attachments?: unknown }
       const taskId = int(d.taskId)
       const content = typeof d.content === 'string' ? d.content.trim().slice(0, 1000) : ''
-      const images = Array.isArray(d.images) ? d.images.filter((x): x is string => typeof x === 'string').slice(0, 9) : []
+      const rawAtt = Array.isArray(d.attachments)
+        ? d.attachments
+        : Array.isArray(d.images)
+          ? d.images.map((x) => (typeof x === 'string' ? { url: x } : x))
+          : []
+      const attachments = rawAtt.slice(0, 9).map((x): TaskAttachment | null => {
+        const o = x && typeof x === 'object' ? (x as Record<string, unknown>) : {}
+        const url = typeof o.url === 'string' && o.url.trim() ? o.url.trim().slice(0, 500) : ''
+        if (!url) return null
+        const kind = ['image', 'video', 'audio', 'folder', 'file'].includes(String(o.kind)) ? (String(o.kind) as TaskAttachment['kind']) : 'file'
+        return { kind, url, name: typeof o.name === 'string' ? o.name.slice(0, 255) : '' }
+      }).filter((x): x is TaskAttachment => x !== null)
       const t = await store.getTask(taskId)
       if (!t) return ack(fail('任务不存在'))
       if (!(await memberRoleOf(store, t.companyId, auth.id))) return ack(fail('非本公司成员'))
-      if (!content && images.length === 0) return ack(fail('留言不能为空'))
-      const comment = await store.addTaskComment({ taskId, userId: auth.id, content, images })
+      if (!content && attachments.length === 0) return ack(fail('留言不能为空'))
+      const comment = await store.addTaskComment({ taskId, userId: auth.id, content, attachments })
       io.emit('task:tasksUpdated', { companyId: t.companyId })
       ack(ok({ comment }))
     })

@@ -326,12 +326,15 @@ export interface TaskAssignment {
   avatar?: string
 }
 
+export type TaskAttachmentKind = 'image' | 'video' | 'audio' | 'folder' | 'file'
+export interface TaskAttachment { kind: TaskAttachmentKind; url: string; name: string }
+
 export interface TaskComment {
   id: number
   taskId: number
   userId: number
   content: string
-  images: string[]
+  attachments: TaskAttachment[]
   createdAt: string
   username?: string
   nick?: string
