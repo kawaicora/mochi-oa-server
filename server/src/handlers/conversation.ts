@@ -263,7 +263,8 @@ export function registerConversationHandlers(ctx: Ctx): void {
       if (!conv) return ack(fail('对话不存在'))
       if ((await store.getConversationMember(conversationId, auth.id)) === null) return ack(fail('不在该对话中'))
       const msg = await store.getMessage(conversationId, messageId)
-      if (!msg) return ack(fail('消息不存在'))
+      // 本地临时消息（id 未落到服务端）视为已撤回，容忍——避免"消息不存在"导致客户端无法撤回
+      if (!msg) return ack(ok())
       // 权限：本人可删自己的；公司管理员可删群内任意
       const own = msg.fromId === auth.id
       let admin = false
