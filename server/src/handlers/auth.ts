@@ -116,12 +116,18 @@ function clientInfoFrom(data: unknown): { ip: string; location: string; device: 
  *  注：无条件信任代理头；若客户端能直连服务器并自伪造代理头会失真，生产反代场景适用。 */
 function realIp(socket: Socket): string {
   const h = socket.handshake.headers ?? {}
-  const fwdRaw = h['x-forwarded-for']
-  const fwd = Array.isArray(fwdRaw) ? fwdRaw[0] : typeof fwdRaw === 'string' ? fwdRaw : undefined
-  if (fwd?.trim()) return fwd.trim().split(',')[0].trim().slice(0, 64)
-  const realRaw = h['x-real-ip']
-  const real = Array.isArray(realRaw) ? realRaw[0] : typeof realRaw === 'string' ? realRaw : undefined
-  if (real?.trim()) return real.trim().slice(0, 64)
+  const read = (name: string): string => {
+    const v = h[name]
+    const raw = Array.isArray(v) ? v[0] : typeof v === 'string' ? v : undefined
+    return raw?.trim() ?? ''
+  }
+  const first = (s: string): string => s.split(',')[0].trim().slice(0, 64)
+  const cf = read('cf-connecting-ip')
+  if (cf) return first(cf)
+  const xff = read('x-forwarded-for')
+  if (xff) return first(xff)
+  const rr = read('x-real-ip') || read('x-client-ip')
+  if (rr) return first(rr)
   return socket.handshake.address
 }
 
