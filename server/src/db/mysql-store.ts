@@ -234,10 +234,14 @@ export class MySqlStore implements Store {
     if (this.opts.autoSchema ?? true) {
       // 由 ORM 模型自动建表，无手写 SQL
       await this.sequelize.sync()
-      // 已读回执：为已存在的 conversation_members 补 last_read_message_id 列（幂等，兼容老库）
-      await this.sequelize
-        .query('ALTER TABLE `conversation_members` ADD COLUMN IF NOT EXISTS `last_read_message_id` BIGINT UNSIGNED NULL AFTER `unread`')
-        .catch(() => {})
+      // 已读回执：为已存在的 conversation_members 补 last_read_message_id 列（MySQL 8 不支持 ADD COLUMN IF NOT EXISTS，先查列再补，幂等兼容老库）
+      const [infoRows] = (await this.sequelize.query(
+        "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'conversation_members' AND COLUMN_NAME = 'last_read_message_id'"
+      )) as [Array<{ c: number }>, unknown]
+      const colExists = Array.isArray(infoRows) && infoRows.length > 0 && Number(infoRows[0]?.c) > 0
+      if (!colExists) {
+        await this.sequelize.query('ALTER TABLE `conversation_members` ADD COLUMN `last_read_message_id` BIGINT UNSIGNED NULL AFTER `unread`')
+      }
     }
   }
 
