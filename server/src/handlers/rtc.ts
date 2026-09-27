@@ -253,6 +253,12 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       if (!roomId) return ack(fail('缺少房间号'))
       const r = rooms.get(roomId)
       if (!r) return ack(fail('房间不存在'))
+      const raw = d.signal
+      const sigType = raw && typeof raw === 'object' ? String((raw as { type?: unknown }).type ?? '') : ''
+      let sigDetail = ''
+      if (sigType === 'ice') sigDetail = String((raw as { candidate?: unknown }).candidate ?? '')
+      else if (sigType === 'offer' || sigType === 'answer') sigDetail = 'sdpLen=' + String((raw as { sdp?: unknown }).sdp ?? '').length
+      console.log('[rtc:signal] from user=' + u.id + ' room=' + roomId + ' type=' + sigType + (sigDetail ? ' ' + sigDetail : ''))
       socket.to(rtcRoom(roomId)).emit('rtc:signal', { room: roomId, from: peerOf(socket), signal: d.signal })
       ack(ok())
     })
