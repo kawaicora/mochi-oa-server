@@ -1,29 +1,52 @@
-// tools/compile-bytenode.mjs （服务端）
-// 把 tsc 编译产物 dist/**/*.js 全部编译成 V8 字节码(.jsc) 二进制，原 .js 替换为 loader。
-// 模块间 require('xxx.js') → 加载 loader → 加载 'xxx.jsc'，链式全部走字节码。
-// 运行时解包拿到的是字节码，无法直接还原成明文 JS。
-// 服务端是纯 Node：用本机 node（与运行环境 node 22 同系）编译即可。
+// tools/compile-bytenode.mjs （服务端加固）
+// 流程：tsc 已把 src 编译到 dist/ → esbuild 把业务打成单文件 dist/app.js（依赖库 external）→
+// bytenode 把 app.js 编译成 V8 字节码 app.jsc，dist/index.js 替换为 loader。
+// 运行时解包拿到的是字节码，无法直接还原成明文 JS；依赖库在 node_modules（公开）保持明文。
+import { build } from 'esbuild'
 import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
+const root = path.resolve('.')
 const cli = path.resolve('node_modules/bytenode/lib/cli.js')
+const entry = path.join(root, 'dist', 'index.js')
+const bundle = path.join(root, 'dist', 'app.js')
 
-function compileAll(dir) {
-  for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, f.name)
-    if (f.isDirectory()) {
-      compileAll(p)
-    } else if (f.name.endsWith('.js')) {
-      execSync(`node "${cli}" -c "${p}"`, { stdio: 'inherit' })
-      const base = f.name.replace(/\.js$/, '.jsc')
-      // loader：先注册 .jsc 扩展，再加载对应字节码模块
-      const loader = `require('bytenode');\nrequire('./${base}')`
-      fs.writeFileSync(p, loader, 'utf8')
-      console.log('[obf]', p.replace(/\\/g, '/'), '->', base)
-    }
-  }
+async function main() {
+  // 1) esbuild：业务单文件 bundle（第三方依赖 external，运行时从 node_modules require）
+  await build({
+    entryPoints: [entry],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node22',
+    outfile: bundle,
+    logLevel: 'warning',
+    external: [
+      'sequelize',
+      'mysql2',
+      'socket.io',
+      'socket.io-client',
+      'multer',
+      'nodemailer',
+      'jsonwebtoken',
+      'dotenv',
+      'bytenode'
+    ]
+  })
+  console.log('[obf] esbuild bundle -> dist/app.js')
+
+  // 2) bytenode：app.js 编译成 V8 字节码
+  execSync(`node "${cli}" -c "${bundle}"`, { stdio: 'inherit' })
+
+  // 3) 入口 index.js 替换为 loader
+  const loader = `require('bytenode');\nrequire('./app.jsc')`
+  fs.writeFileSync(entry, loader, 'utf8')
+  console.log('[obf] dist/index.js -> loader, dist/app.jsc 生成')
+  console.log('[obf] done')
 }
 
-compileAll(path.resolve('dist'))
-console.log('[obf] done')
+main().catch((e) => {
+  console.error('[obf] FAILED:', e)
+  process.exit(1)
+})
