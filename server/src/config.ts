@@ -51,10 +51,12 @@ export interface ServerConfig {
   /** 本地文件存储 */
   file: {
     dir: string
-    /** 对外访问的 URL 前缀（本地 HTTPS 下载时用），如 https://host/files */
-    baseUrl: string
+    /** 公开访问的源（origin，不带 /files），如 http://192.168.2.57；useRelativeUrl=false 时拼到 /files/ 前 */
+    publicBase: string
     /** 单文件大小上限（字节） */
     maxBytes: number
+    /** 对外返回的文件 URL 是否用相对路径（/files/...，默认 true，便于迁移）；false 时用 publicBase 拼接绝对 URL。数据库始终存相对路径 */
+    useRelativeUrl: boolean
   }
   /** 初始管理员账号密码：首次启动时播种到数据库 */
   admin: { username: string | null; password: string | null }
@@ -180,8 +182,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
         : null,
     file: {
       dir: env.FILE_DIR ?? './data',
-      baseUrl: env.FILE_BASE_URL ?? `http://${env.HOST ?? '0.0.0.0'}:${Number(env.PORT ?? 3000)}/files`,
-      maxBytes: Number(env.FILE_MAX_BYTES ?? 20 * 1024 * 1024)
+      publicBase: (env.FILE_BASE_URL ?? `http://${env.HOST ?? '0.0.0.0'}:${Number(env.PORT ?? 3000)}`).replace(/\/$/, ''),
+      maxBytes: Number(env.FILE_MAX_BYTES ?? 20 * 1024 * 1024),
+      useRelativeUrl: bool(env.USE_RELATIVE_FILE_URL, true)
     },
     admin: { username: env.ADMIN_USER ?? null, password: env.ADMIN_PASSWORD ?? null },
     serverAdmins: serverAdmins(env),

@@ -2,11 +2,20 @@ import type { Server, Socket } from 'socket.io'
 import { fail, groupRoom, ok, userRoom } from '../util'
 import type { AuthUser, Ctx } from './auth'
 import type { ChatKind, Conversation } from '../types'
+import type { ServerConfig } from '../config'
+import { pubUrl } from '../files'
 
 type Ack = (res: Record<string, unknown>) => void
 
 function authed(socket: Socket): AuthUser | null {
   return socket.data.auth ? (socket.data.auth as AuthUser) : null
+}
+
+/** 对外返回的消息：useRelativeUrl=false 时把文件类 content 与头像拼成绝对 URL（默认相对，客户端自行拼 host） */
+function decorateMsg(config: ServerConfig, m: { kind: string; content?: string; avatar?: string }): void {
+  if (config.file.useRelativeUrl) return
+  if (m.kind !== 'text' && m.kind !== 'folder' && m.content) m.content = pubUrl(config, m.content)
+  if (m.avatar) m.avatar = pubUrl(config, m.avatar)
 }
 
 const isText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 4000
@@ -85,7 +94,7 @@ function broadcastDeleted(io: Server, conv: Conversation, conversationId: number
 }
 
 export function registerConversationHandlers(ctx: Ctx): void {
-  const { io, store } = ctx
+  const { io, store, config } = ctx
 
   io.on('connection', (socket) => {
     // ---- 群聊发消息（落库 + 群内广播） ----
@@ -119,6 +128,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
         await store.touchConversation(conv.id, mem.userId, previewOf(kind, content), auth.id)
       }
       // 群内其他成员收一份；发送方经自己的 userRoom 收一份（避免同时进 groupRoom+userRoom 造成双份）
+      decorateMsg(config, msg)
       io.to(groupRoom(groupId)).except(socket.id).emit('chat:message', msg)
       io.to(userRoom(auth.id)).emit('chat:message', msg)
       ack(ok({ id: msg.id }))
@@ -138,6 +148,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const conv = await store.getOrCreateGroupConversation(groupId)
       const msgs = await store.listMessages(conv.id, beforeTs, limit)
       await fillNicks(store, msgs)
+      msgs.forEach((m) => decorateMsg(config, m))
       ack(ok({ messages: msgs }))
     })
 
@@ -168,6 +179,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
       await store.touchConversation(conv.id, auth.id, previewOf(kind, content))
       await store.touchConversation(conv.id, toUserId, previewOf(kind, content), auth.id)
       // 回显给发送方（自己也能看到发出的私信）+ 推送给接收方
+      decorateMsg(config, msg)
       io.to(userRoom(auth.id)).emit('dm:message', msg)
       io.to(userRoom(toUserId)).emit('dm:message', msg)
       ack(ok({ id: msg.id }))
@@ -187,6 +199,7 @@ export function registerConversationHandlers(ctx: Ctx): void {
       const msgs = await store.listMessages(conv.id, beforeTs, limit)
       for (const m of msgs) m.type = 'dm'
       await fillNicks(store, msgs)
+      msgs.forEach((m) => decorateMsg(config, m))
       ack(ok({ messages: msgs }))
     })
 

@@ -57,7 +57,7 @@ async function saveLocal(
   config: ServerConfig,
   originalName: string,
   buf: Buffer,
-  host: string,
+  _host: string, // 已不再用于拼 URL（统一存相对路径 /files/...），保留参数位以兼容调用处
   companyKey = 'default',
   relativeDir = ''
 ): Promise<Saved> {
@@ -73,7 +73,7 @@ async function saveLocal(
   const diskName = await uniqueDiskName(dir, sanitizeName(originalName))
   await writeFile(path.join(dir, diskName), buf)
   const rel = [...segments, encodeURIComponent(diskName)].join('/')
-  return { storage: 'local', url: `http://${host}/files/${rel}` }
+  return { storage: 'local', url: `/files/${rel}` }
 }
 
 /** 从请求解析登录用户（JWT 或 会话 token），未登录返回 0 */
@@ -94,6 +94,13 @@ async function authedUserId(req: IncomingMessage, store: Store, config: ServerCo
 const json = (res: ServerResponse, code: number, body: Record<string, unknown>): void => {
   res.writeHead(code, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(body))
+}
+
+/** 对外返回的文件 URL：useRelativeUrl=true 原样返回相对 /files/...；false 时用 publicBase 拼绝对 URL。数据库始终存相对路径 */
+export function pubUrl(config: ServerConfig, url: string): string {
+  if (config.file.useRelativeUrl) return url
+  if (!url || /^https?:\/\//i.test(url)) return url
+  return config.file.publicBase.replace(/\/$/, '') + (url.startsWith('/') ? url : '/' + url)
 }
 
 /** 读取请求体原始字节（原生 http server 不自动解析 body） */
@@ -340,7 +347,7 @@ export function registerUploadRoutes(http: HttpServer, store: Store, config: Ser
           url: saved.url
         })
         await rm(chunkDir, { recursive: true, force: true }).catch(() => {})
-        json(res, 200, { ok: true, uuid: rec.uuid, filename: rec.filename, mime: rec.mime, size: rec.size, url: rec.url })
+        json(res, 200, { ok: true, uuid: rec.uuid, filename: rec.filename, mime: rec.mime, size: rec.size, url: pubUrl(config, rec.url) })
       } catch (e) {
         json(res, 500, { ok: false, error: e instanceof Error ? e.message : '存储失败' })
       }
@@ -375,8 +382,8 @@ export function registerUploadRoutes(http: HttpServer, store: Store, config: Ser
         for (const e of entries) {
           if (e.isFile) {
             const relPath = `${curRel}/${e.name}`
-            const url = `http://${req.headers.host || `127.0.0.1:${config.port}`}/files/${relPath.split('/').map(encodeURIComponent).join('/')}`
-            files.push({ name: e.name, relPath, url })
+            const rel = `/files/${relPath.split('/').map(encodeURIComponent).join('/')}`
+            files.push({ name: e.name, relPath, url: pubUrl(config, rel) })
           } else {
             await walk(path.join(curDir, e.name), `${curRel}/${e.name}`)
           }
@@ -416,7 +423,7 @@ export function registerUploadRoutes(http: HttpServer, store: Store, config: Ser
             storage: saved.storage,
             url: saved.url
           })
-          json(res, 200, { ok: true, uuid: rec.uuid, filename: rec.filename, mime: rec.mime, size: rec.size, url: rec.url })
+          json(res, 200, { ok: true, uuid: rec.uuid, filename: rec.filename, mime: rec.mime, size: rec.size, url: pubUrl(config, rec.url) })
         } catch (e) {
           json(res, 500, { ok: false, error: e instanceof Error ? e.message : '存储失败' })
         }
