@@ -1,20 +1,8 @@
-# mochioa-server —— 安装 Node 环境并编译服务端
-# 产物：dist/（编译后的 JS）+ node_modules；运行阶段直接 node 启动
+# mochioa-server —— 运行阶段（宿主机已编译为二进制，见 build-server.ps1 / build-server.sh）
+# 镜像内容：node 运行时 + 生产依赖(node_modules) + 编译产物(dist: loader index.js + 字节码 app.jsc) + ffmpeg
+# 不含任何业务源代码（server/src、编译工具均不进入镜像）
 
-# ---- 构建阶段 ----
-FROM node:22-slim AS build
-WORKDIR /app
-
-# 先装依赖（利用层缓存）
-COPY server/package.json server/package-lock.json ./
-RUN npm ci
-
-# 编译 TypeScript
-COPY server/ ./
-RUN npm run build
-
-# ---- 运行阶段 ----
-FROM node:22-slim AS runtime
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -23,9 +11,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /app/package.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
+# 生产依赖（镜像内安装；不含 typescript/esbuild/bytenode 等编译工具）
+COPY server/package.json server/package-lock.json ./
+RUN npm ci --omit=dev
+
+# 编译产物（宿主机 build-server 脚本生成）：仅 index.js(loader) + app.jsc(字节码)，无源码
+COPY server/dist ./dist
 # 环境配置：compose 通过 environment 注入优先，此处 .env 供 dotenv 兜底（含 SERVER_ADMIN_USERS / MAIL_*）
 COPY .env ./
 

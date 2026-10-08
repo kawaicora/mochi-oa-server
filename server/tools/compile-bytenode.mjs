@@ -42,7 +42,15 @@ async function main() {
   // 3) 入口 index.js 替换为 loader
   const loader = `require('bytenode');\nrequire('./app.jsc')`
   fs.writeFileSync(entry, loader, 'utf8')
-  console.log('[obf] dist/index.js -> loader, dist/app.jsc 生成')
+
+  // 4) 清理明文：删除 esbuild bundle（app.js）与 tsc 其他明文产物，
+  //    只保留 loader(index.js) + 字节码(app.jsc) —— 镜像/分发里不含任何业务源码
+  const distDir = path.join(root, 'dist')
+  const keep = new Set(['index.js', 'app.jsc'])
+  for (const f of fs.readdirSync(distDir)) {
+    if (!keep.has(f)) fs.rmSync(path.join(distDir, f), { recursive: true, force: true })
+  }
+  console.log('[obf] 清理明文产物（仅保留 index.js + app.jsc）')
   console.log('[obf] done')
 }
 
