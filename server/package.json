@@ -1,6 +1,6 @@
 {
   "name": "mochioa-server",
-  "version": "0.1.0",
+  "version": "2.3.0",
   "private": true,
   "description": "mochioa 服务端：基于 Socket.IO 的注册登录 + 多 company 组织管理服务，支持 MySQL，可编译 Linux/Windows/macOS",
   "main": "dist/index.js",

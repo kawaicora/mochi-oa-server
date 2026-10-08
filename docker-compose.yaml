@@ -3,8 +3,9 @@
 # 变量可用 .env 覆盖（MYSQL_ROOT_PASSWORD / JWT_SECRET / TRANSPORTS 等）
 
 services:
-  mysql:
+  mochi-oa-mysql-2f8e9c:
     image: mysql:8.0
+    container_name: mochi-oa-mysql-2f8e9c
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mochioa_root_pw}
@@ -16,14 +17,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-    ports:
-      - "3306:3306"
+    # ports:
+    #   - "3306:3306"
 
-  server:
+  mochi-oa-server-2f8e9c:
     build: .
+    container_name: mochi-oa-server-2f8e9c
     restart: unless-stopped
     depends_on:
-      mysql:
+      mochi-oa-mysql-2f8e9c:
         condition: service_healthy
     environment:
       HOST: 0.0.0.0
@@ -32,7 +34,7 @@ services:
       # 部署在 Cloudflare 等只放行 HTTP/HTTPS 的场景：TRANSPORTS=polling
       TRUST_PROXY: ${TRUST_PROXY:-false}
       STORAGE: mysql
-      MYSQL_HOST: mysql
+      MYSQL_HOST: mochi-oa-mysql-2f8e9c
       MYSQL_PORT: 3306
       MYSQL_USER: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mochioa_root_pw}
