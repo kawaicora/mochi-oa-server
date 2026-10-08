@@ -21,9 +21,11 @@ services:
     #   - "3306:3306"
 
   mochi-oa-server-2f8e9c:
-    # 直接用 build-server 脚本产出的基础镜像（不含 dist/.env；dist 挂载进容器），不再在 compose 里 build
-    image: mochi-oa-server:${SERVER_IMAGE_TAG:-latest}
+    # 直接用官方 node:22-slim，不 build 自定义镜像；dist/node_modules/data 全部挂载
+    image: node:22-slim
     container_name: mochi-oa-server-2f8e9c
+    working_dir: /app
+    command: ["node", "dist/index.js"]
     restart: unless-stopped
     depends_on:
       mochi-oa-mysql-2f8e9c:
@@ -73,6 +75,8 @@ services:
     volumes:
       # 编译产物（build-server 脚本生成于 server/dist，二进制字节码）：宿主编译后挂载进容器
       - ./server/dist:/app/dist
+      # 依赖（编译时 npm ci 装好的 node_modules 挂载进容器，无需镜像内安装）
+      - ./server/node_modules:/app/node_modules
       # 本地文件存储（按 {公司id|default}/{文件名/文件夹结构}，可独立硬盘）
       - ./data:/app/data
     ports:
