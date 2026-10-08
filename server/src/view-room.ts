@@ -245,8 +245,8 @@ async function doLogin() {
     await new Promise((res, rej) => { sock.once('connect', res); sock.once('connect_error', rej); setTimeout(() => rej(new Error('连接超时')), 8000); });
     const ack = await emitAck('auth:login', { account, password, device: 'web-room' });
     if (!ack.ok) { showErr(ack.error || '登录失败'); return; }
-    token = ack.data.token; localStorage.setItem('vr_token', token);
-    myUser = ack.data.user;
+    token = ack.token; localStorage.setItem('vr_token', token);
+    myUser = ack.user;
     enterList();
   } catch (e) { showErr(e instanceof Error ? e.message : '登录失败'); }
 }
@@ -260,7 +260,7 @@ async function enterList() {
 async function loadRooms() {
   try {
     const ack = await emitAck('rtc:listRooms', {});
-    if (ack.ok) { rooms = ack.data.rooms || []; renderRooms(); }
+    if (ack.ok) { rooms = ack.rooms || []; renderRooms(); }
   } catch (e) { console.warn('[view/room] listRooms fail', e); }
 }
 function renderRooms() {
@@ -340,7 +340,7 @@ async function doJoin(r) {
     if (!localStream) { localStream = await acquireStream(joinMode.val); }
     const ack = await emitAck('rtc:join', { roomId: r.id, password, kind: r.kind });
     if (!ack.ok) { alert(ack.error || '加入失败'); return; }
-    enterCall(ack.data.room, ack.data.peers || [], ack.data.iceServers || [], localStream, ack.data.kind);
+    enterCall(ack.room, ack.peers || [], ack.iceServers || [], localStream, ack.kind);
   } catch (e) {
     alert(e instanceof Error ? e.message : '加入失败');
   }
@@ -527,7 +527,7 @@ $('logout-btn').onclick = () => { token = ''; localStorage.removeItem('vr_token'
       connect();
       await new Promise((res, rej) => { sock.once('connect', res); sock.once('connect_error', rej); setTimeout(() => rej(new Error('连接超时')), 8000); });
       const ack = await emitAck('auth:me', {});
-      if (ack.ok) { myUser = ack.data.user; enterList(); return; }
+      if (ack.ok) { myUser = ack.user; enterList(); return; }
       token = ''; localStorage.removeItem('vr_token'); showLogin();
     } catch { showLogin(); }
   } else { showLogin(); }
