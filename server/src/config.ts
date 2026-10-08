@@ -55,7 +55,7 @@ export interface ServerConfig {
     publicBase: string
     /** 单文件大小上限（字节） */
     maxBytes: number
-    /** 对外返回的文件 URL 是否用相对路径（/files/...，默认 true，便于迁移）；false 时用 publicBase 拼接绝对 URL。数据库始终存相对路径 */
+    /** 是否使用相对 URL（/files/xxx）而非绝对 URL（http://host/files/xxx） */
     useRelativeUrl: boolean
   }
   /** 初始管理员账号密码：首次启动时播种到数据库 */
