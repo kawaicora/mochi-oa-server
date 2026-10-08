@@ -1,5 +1,6 @@
-# build-server.ps1 -- compile server to bytecode & export a docker archive (no source code)
-# flow: npm ci -> tsc + esbuild + bytenode (dist keeps only index.js loader + app.jsc) -> docker build (Dockerfile does NOT compile) -> docker save+gzip
+# build-server.ps1 -- compile server to bytecode, build base image & export docker archive
+# flow: compile dist in node:22-slim (same V8 as runtime) -> docker build BASE image (NO dist/.env inside) -> docker save+gzip
+# deploy: docker load the tar.gz, then run with mounts: ./dist:/app/dist, ./data:/app/data, env via environment
 # usage: .\build-server.ps1            (default tag: mochi-oa-server:<version>)
 #      .\build-server.ps1 -Tag mytag
 param(
@@ -16,13 +17,13 @@ $vol = "$Root`:/app"
 docker run --rm -v "$vol" -w /app/server node:22-slim sh -c "npm ci && npm run build"
 if ($LASTEXITCODE -ne 0) { throw 'compile failed' }
 
-Write-Host '==> [2/3] docker build (Dockerfile only COPYs bytecode + prod deps, no source)' -ForegroundColor Cyan
+Write-Host '==> [2/3] docker build base image (no dist/.env inside; mounted at runtime)' -ForegroundColor Cyan
 $ver = node -p "require('./server/package.json').version"
 if (-not $Tag) { $Tag = "mochi-oa-server:$ver" }
 docker build -f Dockerfile -t $Tag .
 if ($LASTEXITCODE -ne 0) { throw 'docker build failed' }
 
-Write-Host '==> [3/3] exporting docker archive (bytecode only, no source code)' -ForegroundColor Cyan
+Write-Host '==> [3/3] exporting docker archive (base image; deploy mounts ./dist:/app/dist)' -ForegroundColor Cyan
 $Out = "mochi-oa-server-$ver.tar.gz"
 $Tmp = Join-Path $env:TEMP "mochi-oa-server-$ver.tar"
 docker save $Tag -o $Tmp

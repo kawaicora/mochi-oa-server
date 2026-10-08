@@ -10,12 +10,12 @@ echo "==> 1/3 在 node:22-slim 内编译（与运行镜像同 V8，避免字节�
 # bytenode 字节码与 Node/V8 版本强绑定，必须用与运行镜像相同的 node:22-slim 编译
 docker run --rm -v "$(pwd):/app" -w /app/server node:22-slim sh -c "npm ci && npm run build"
 
-echo "==> 2/3 构建镜像（Dockerfile 只 COPY 二进制 + 生产依赖，不含源码）"
+echo "==> 2/3 构建基础镜像（不含 dist/.env，运行时挂载 ./dist:/app/dist）"
 ver=$(node -p "require('./server/package.json').version")
 tag="${TAG:-mochi-oa-server:$ver}"
 docker build -f Dockerfile -t "$tag" .
 
-echo "==> 3/3 导出 docker 压缩包（仅二进制，不含源代码）"
+echo "==> 3/3 导出 docker 压缩包（基础镜像；部署时挂载 ./dist:/app/dist）"
 out="mochi-oa-server-$ver.tar.gz"
 docker save "$tag" | gzip > "$out"
-echo "已导出: $out ($tag) —— 仅含二进制字节码，不含源代码"
+echo "已导出: $out ($tag) —— 基础镜像，dist 由 ./dist 挂载"
