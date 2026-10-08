@@ -6,12 +6,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "==> 1/3 编译服务端（tsc + esbuild + bytenode -> 字节码）"
-(
-  cd server
-  npm ci
-  npm run build
-)
+echo "==> 1/3 在 node:22-slim 内编译（与运行镜像同 V8，避免字节码 cachedDataRejected）"
+# bytenode 字节码与 Node/V8 版本强绑定，必须用与运行镜像相同的 node:22-slim 编译
+docker run --rm -v "$(pwd):/app" -w /app/server node:22-slim sh -c "npm ci && npm run build"
 
 echo "==> 2/3 构建镜像（Dockerfile 只 COPY 二进制 + 生产依赖，不含源码）"
 ver=$(node -p "require('./server/package.json').version")

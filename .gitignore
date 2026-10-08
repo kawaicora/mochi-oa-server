@@ -6,3 +6,5 @@ dist/
 *.sql
 data
 *.zip
+# 构建产物（docker 导出包）
+*.tar.gz
