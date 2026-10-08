@@ -14,9 +14,20 @@ interface Saved {
   url: string
 }
 
-/** 清洗文件名：只取 basename（防路径穿越），去掉控制/危险字符，保留中文与常用符号 */
+/** 清洗文件名：只取 basename（防路径穿越），去掉控制/危险字符，保留中文与常用符号。
+ * 若原始名是完整 URL（如 CDN 防盗链签名 URL 被误当文件名上传），只取路径最后一段为真实文件名，
+ * 丢弃协议 / host / query（避免把 auth_key=... 等签名参数塞进文件名）。 */
 function sanitizeName(name: string): string {
-  const base = path.basename(String(name ?? '').replace(/\\/g, '/'))
+  let s = String(name ?? '')
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) {
+    try {
+      const u = new URL(s)
+      if (u.pathname) s = decodeURIComponent(path.basename(u.pathname))
+    } catch {
+      /* URL 解析失败则保留原样，交给下面的 basename 兜底 */
+    }
+  }
+  const base = path.basename(s.replace(/\\/g, '/'))
   const cleaned = base.replace(/[\x00-\x1f\x7f<>:"/\\|?*]+/g, '_').trim().slice(0, 180)
   return cleaned || 'file'
 }
