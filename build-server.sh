@@ -14,6 +14,7 @@ echo "==> 2/3 构建基础镜像（不含 dist/.env，运行时挂载 ./dist:/ap
 ver=$(node -p "require('./server/package.json').version")
 tag="${TAG:-mochi-oa-server:$ver}"
 docker build -f Dockerfile -t "$tag" .
+docker tag "$tag" mochi-oa-server:latest
 
 echo "==> 3/3 导出 docker 压缩包（基础镜像；部署时挂载 ./dist:/app/dist）"
 out="mochi-oa-server-$ver.tar.gz"

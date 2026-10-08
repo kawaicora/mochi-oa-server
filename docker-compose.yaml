@@ -21,7 +21,8 @@ services:
     #   - "3306:3306"
 
   mochi-oa-server-2f8e9c:
-    build: .
+    # 直接用 build-server 脚本产出的基础镜像（不含 dist/.env；dist 挂载进容器），不再在 compose 里 build
+    image: mochi-oa-server:${SERVER_IMAGE_TAG:-latest}
     container_name: mochi-oa-server-2f8e9c
     restart: unless-stopped
     depends_on:
@@ -70,6 +71,9 @@ services:
       CLOUDFLARE_TURN_KEY_ID: ${CLOUDFLARE_TURN_KEY_ID:-}
       ICE_SERVERS_TOKEN_SECOND: ${ICE_SERVERS_TOKEN_SECOND:-86400}
     volumes:
+      # 编译产物（build-server 脚本生成于 server/dist，二进制字节码）：宿主编译后挂载进容器
+      - ./server/dist:/app/dist
+      # 本地文件存储（按 {公司id|default}/{文件名/文件夹结构}，可独立硬盘）
       - ./data:/app/data
     ports:
       - "${SERVER_PORT:-3000}:3000"

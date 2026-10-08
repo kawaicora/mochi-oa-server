@@ -22,6 +22,8 @@ $ver = node -p "require('./server/package.json').version"
 if (-not $Tag) { $Tag = "mochi-oa-server:$ver" }
 docker build -f Dockerfile -t $Tag .
 if ($LASTEXITCODE -ne 0) { throw 'docker build failed' }
+docker tag $Tag mochi-oa-server:latest
+if ($LASTEXITCODE -ne 0) { throw 'docker tag failed' }
 
 Write-Host '==> [3/3] exporting docker archive (base image; deploy mounts ./dist:/app/dist)' -ForegroundColor Cyan
 $Out = "mochi-oa-server-$ver.tar.gz"
