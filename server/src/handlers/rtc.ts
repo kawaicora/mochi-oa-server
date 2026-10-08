@@ -134,6 +134,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
     if (peersInfo(rtcId).length > 0) return
     r.ended = true
     rooms.delete(rtcId)
+    broadcastRoomsChanged()
   }
 
   /** 强制结束：通知所有参与者、踢出房间、删除会话（会议号作废） */
@@ -143,6 +144,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
     r.ended = true
     rooms.delete(rtcId)
     io.to(rtcRoom(rtcId)).emit('rtc:ended', { room: rtcId, reason: 'ended', by })
+    broadcastRoomsChanged()
     for (const sid of io.sockets.adapter.rooms.get(rtcRoom(rtcId)) ?? []) {
       const s = io.sockets.sockets.get(sid)
       if (s) {
@@ -156,6 +158,43 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
   // 每小时清理超期预约会议
   const sweepTimer = setInterval(expireSweep, 3600000)
   if (typeof sweepTimer.unref === 'function') sweepTimer.unref()
+
+  /** 进行中的房间列表（网页端 /view/room 据此展示所有可加入的会议/通话） */
+  function liveRooms(): Array<{
+    id: string
+    type: RtcType
+    kind: RtcKind
+    meetingNo?: string
+    title?: string
+    hasPassword: boolean
+    hostId: number
+    groupId?: number
+    peerCount: number
+    startedAt: number
+  }> {
+    const out: ReturnType<typeof liveRooms> = []
+    for (const r of rooms.values()) {
+      if (r.ended || r.startedAt == null) continue
+      out.push({
+        id: r.rtcId,
+        type: r.type,
+        kind: r.kind,
+        meetingNo: r.meetingNo,
+        title: r.title,
+        hasPassword: !!r.password,
+        hostId: r.hostId,
+        groupId: r.groupId,
+        peerCount: peersInfo(r.rtcId).length,
+        startedAt: r.startedAt
+      })
+    }
+    return out
+  }
+
+  /** 进行中房间列表变化 → 通知所有在线端（/view/room 网页端据此实时刷新列表） */
+  function broadcastRoomsChanged(): void {
+    io.emit('rtc:roomsChanged', { ts: Date.now() })
+  }
 
   io.on('connection', (socket) => {
     // 断线清理：从它所在的所有 rtc 房间退出并通知
@@ -197,6 +236,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
         // 会议可以直接开始
         session.startedAt = Date.now()
         await addSocket(socket, meetingNo, u)
+        broadcastRoomsChanged()
         ack(ok({ meeting: view(session), scheduled: false, peers: peersInfo(meetingNo).filter((p) => p.socketId !== socket.id), iceServers: await getIceServers(config) }))
       }
     })
@@ -213,6 +253,15 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       const r = rooms.get(meetingNo)
       if (!r || r.type !== 'conf') return ack(fail('会议不存在或已结束'))
       ack(ok({ meeting: view(r) }))
+    })
+
+    // ─── 查询所有进行中的会议/通话（网页端 /view/room 拉取列表） ───
+    socket.on('rtc:listRooms', (_data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const u = authed(socket)
+      if (!u) return ack(fail('未登录'))
+      expireSweep()
+      ack(ok({ rooms: liveRooms() }))
     })
 
     // ─── 加入房间（会议按会议号；dm/group 按 rtcId） ───
@@ -234,6 +283,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       if (!wasStarted) r.startedAt = Date.now() // 首个加入者即开始会议
       await addSocket(socket, roomId, u)
       socket.to(rtcRoom(roomId)).emit('rtc:peerJoined', { room: roomId, peer: peerOf(socket) })
+      broadcastRoomsChanged()
       ack(
         ok({
           room: view(r),
@@ -292,6 +342,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       removeSocket(socket, roomId)
       socket.to(rtcRoom(roomId)).emit('rtc:peerLeft', { room: roomId, peerId: socket.id })
       cleanupIfEmpty(roomId)
+      broadcastRoomsChanged()
       ack(ok())
     })
 
@@ -328,6 +379,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       await addSocket(socket, rtcId, u)
       // 通知对方所有在线端
       io.to(userRoom(targetId)).emit('rtc:dmIncoming', { room: rtcId, kind, from: peerOf(socket), ts: Date.now() })
+      broadcastRoomsChanged()
       ack(ok({ room: view(r), kind }))
     })
 
@@ -343,6 +395,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       if (d.accept === true) {
         await addSocket(socket, roomId, u)
         socket.to(rtcRoom(roomId)).emit('rtc:peerJoined', { room: roomId, peer: peerOf(socket) })
+        broadcastRoomsChanged()
         ack(ok({ room: view(r), peers: peersInfo(roomId).filter((p) => p.socketId !== socket.id), iceServers: (await getIceServers(config)) as IceServer[] }))
       } else {
         socket.to(rtcRoom(roomId)).emit('rtc:dmRejected', { room: roomId, by: peerOf(socket) })
@@ -375,6 +428,7 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       // 通知在线群成员（群房间）
       // 只通知群内其它成员（socket.to 排除发起人自己，避免发起人也弹接听窗口）
       socket.to(groupRoom(gid)).emit('rtc:groupCall', { room: rtcId, kind, groupId: gid, from: peerOf(socket), ts: Date.now() })
+      broadcastRoomsChanged()
       ack(
         ok({
           room: view(r),
