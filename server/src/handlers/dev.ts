@@ -162,7 +162,11 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       console.log(`[dev] 被控端系统上报 deviceId=${deviceId} cpu=${perf.cpu ?? '?'}% mem=${perf.memPercent ?? '?'}% 状态=${complete ? 'updated' : 'lost'} 转发至=${dev.controller || '(无控制端)'}`)
       if (dev.controller) {
         const ctrl = io.sockets.sockets.get(dev.controller)
-        if (ctrl) send(ctrl, 'dev:sys', { deviceId, info: d.info, perf: d.perf })
+        if (ctrl) {
+          send(ctrl, 'dev:sys', { deviceId, info: d.info, perf: d.perf })
+        } else {
+          dev.controller = undefined // 控制端已断开/刷新页面，清绑定，避免后续推送到死 socket
+        }
       }
       ack(ok({ deviceId, status: complete ? 'updated' : 'lost' }))
     })
@@ -193,11 +197,12 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       ack(ok())
     })
 
-    // 断开：清在线表
+    // 断开：清在线表 + 解除控制端绑定
     socket.on('disconnect', () => {
       const removed: string[] = []
       for (const [k, v] of remoteDevices) {
         if (v.socket === socket) { remoteDevices.delete(k); removed.push(k) }
+        if (v.controller === socket.id) v.controller = undefined // 控制端断开/刷新：解除其控制的设备绑定
       }
       if (removed.length) console.log(`[dev] 被控端离线 socket=${socket.id} devices=${removed.join(',')}（剩余 ${remoteDevices.size} 台）`)
     })
