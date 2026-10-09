@@ -73,6 +73,24 @@
     const pct = total > 0 ? Math.round((part / total) * 100) : 0
     return label + '：已用 ' + usedGb.toFixed(1) + 'GB / 共 ' + totalGb.toFixed(1) + 'GB（' + pct + '%），剩余 ' + ((totalGb - usedGb) || 0).toFixed(1) + 'GB'
   }
+  // 磁盘：每个分区/硬盘单独画一个圆饼（多盘 → 多列自适应，flex-wrap 自动换行）
+  function renderDisks(fs, info) {
+    const wrap = document.getElementById('pie-disks')
+    if (!wrap) return
+    wrap.innerHTML = ''
+    if (!fs || !fs.length) { wrap.innerHTML = '<div class="pie-nodata">' + (info.disk || '等待上报磁盘信息…') + '</div>'; return }
+    for (const f of fs) {
+      const item = document.createElement('div'); item.className = 'pie-item'
+      const c = document.createElement('canvas'); c.width = 120; c.height = 120
+      item.appendChild(c)
+      const t = document.createElement('div'); t.className = 'pie-item-tip'
+      const usedG = Math.round((f.used || 0) / 1073741824), sizeG = Math.round((f.size || 0) / 1073741824)
+      t.textContent = (f.mount || '盘') + ' ' + usedG + '/' + sizeG + 'GB' + (f.use != null ? ' · ' + Math.round(f.use) + '%' : '')
+      item.appendChild(t)
+      wrap.appendChild(item)
+      drawPie(c, f.used || 0, f.size || 0, '#f0a14a')
+    }
+  }
 
   // ── 远程系统信息（客户端 dev:sys 上报）──
   function fmtMem(mem) { return (mem || []).map((m) => (m.capacity || '') + ' · ' + (m.speed || '') + ' · ' + (m.manufacturer || '') + ' · ' + (m.type || '')).join('\n') || '—' }
@@ -91,18 +109,12 @@
     setTxt('s-board', info.board || '—')
     setTxt('s-gpu', (info.gpuInfo || []).map((g) => g.name || '').filter(Boolean).join(' / ') || info.gpu || '—')
     setTxt('s-uptime', uptime(info.uptime))
-    // 磁盘圆饼（fs 结构化，v2.9.88 起客户端上报）
-    const fs = info.fs || []
-    const diskTotal = fs.reduce((s, f) => s + (f.size || 0), 0)
-    const diskUsed = fs.reduce((s, f) => s + (f.used || 0), 0)
-    drawPie(document.getElementById('pie-disk'), diskUsed, diskTotal, '#f0a14a')
-    setTxt('disk-tip', fs.length
-      ? fs.map((f) => (f.mount || '') + '  ' + Math.round((f.used || 0) / 1073741824) + 'GB/' + Math.round((f.size || 0) / 1073741824) + 'GB（' + (f.use || 0) + '%）').join('\n')
-      : (info.disk || '—'))
+    // 磁盘：每个盘单独一个圆饼
+    renderDisks(info.fs || [], info)
+    setTxt('s-disk', info.disk || '—')
     // 内存圆饼
     drawPie(document.getElementById('pie-mem'), (info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '#00c88a')
     setTxt('mem-tip', pieTip((info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '内存'))
-    setTxt('s-disk', info.disk || '—')
     setTxt('s-memdetail', fmtMem(info.memDetail))
     setTxt('s-gpuinfo', fmtGpuInfo(info.gpuInfo))
     setTxt('s-devices', fmtDevices(info.devices))

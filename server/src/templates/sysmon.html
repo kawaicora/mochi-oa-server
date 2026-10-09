@@ -25,12 +25,10 @@
       <div class="sys-card"><div class="sc-k">显卡</div><div class="sc-v" id="s-gpu">—</div></div>
       <div class="sys-card"><div class="sc-k">运行时长</div><div class="sc-v" id="s-uptime">—</div></div>
     </div>
+    <div class="sys-grid">
     <div class="sys-disk">
-      <div class="sc-k">磁盘</div>
-      <div class="pie-row">
-        <canvas id="pie-disk" class="pie-canvas" width="170" height="170"></canvas>
-        <div class="pie-tip" id="disk-tip">等待上报磁盘信息…</div>
-      </div>
+      <div class="sc-k">磁盘（每盘一圆饼）</div>
+      <div id="pie-disks" class="pie-disks"><div class="pie-nodata">等待上报磁盘信息…</div></div>
       <pre id="s-disk" class="disk-pre">—</pre>
     </div>
     <div class="sys-disk">
@@ -45,6 +43,7 @@
     <div class="sys-disk"><div class="sc-k">GPU 信息</div><pre id="s-gpuinfo" class="disk-pre">—</pre></div>
     <div class="sys-disk"><div class="sc-k">设备列表</div><pre id="s-devices" class="disk-pre">—</pre></div>
     <div class="sys-disk"><div class="sc-k">进程（按内存前 40）</div><pre id="s-procs" class="disk-pre">—</pre></div>
+    </div>
 
     <!-- 远程客户端电脑：远程画面 + 房间风格控制栏（摄像头/屏幕/麦克风，设备为远程电脑的） -->
     <div class="panel-box" id="remote-panel" style="display:none">
