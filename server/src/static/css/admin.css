@@ -168,6 +168,17 @@ input:focus{border-color:#4a6cf7}
 .media-item{display:flex;flex-direction:column;gap:8px}
 .media-box{background:#0d1117;border:1px solid #2a2f3d;border-radius:6px;min-height:160px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 
+/* ── 远程电脑查看（remote-view）── */
+.rv-stage{position:relative;background:#0d1117;border:1px solid #2a2f3d;border-radius:6px;min-height:280px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.rv-stage video{width:100%;max-height:480px;object-fit:contain;background:#000}
+.rv-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8a8f99;font-size:13px;pointer-events:none}
+.rv-bar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.rv-hint{font-size:12px;color:#8a8f99;margin-left:4px}
+.rv-menu{position:fixed;z-index:9999;min-width:200px;max-height:300px;overflow:auto;background:#1a1e28;border:1px solid #2a2f3d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);padding:6px 0}
+.rv-menu-title{font-size:12px;color:#8a8f99;padding:6px 12px;border-bottom:1px solid #232833}
+.rv-menu-item{padding:8px 12px;font-size:13px;color:#cfd3dc;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv-menu-item:hover{background:#2d2d44}
+
 /* ── 用户管理 ── */
 .user-table .ut-head,.user-table .ut-row{display:grid;grid-template-columns:50px 130px 110px 56px 100px 150px 90px 1fr 180px;gap:8px;padding:8px 10px;font-size:12px;align-items:center}
 .user-table .ut-head{color:#8a8f99;border-bottom:1px solid #2a2f3d}

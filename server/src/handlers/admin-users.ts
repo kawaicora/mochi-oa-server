@@ -13,6 +13,7 @@ import type { ServerConfig } from '../config'
 import type { Store } from '../db/store'
 import { fail, ok } from '../util'
 import { isServerAdmin, serverAdminOverrides } from './mail'
+import { remoteDevices } from './dev'
 import type { AuthUser } from './auth'
 import * as os from 'node:os'
 
@@ -144,7 +145,7 @@ export function registerAdminUsersHandlers(ctx: { io: Server; store: Store; conf
       const u = authedUser()
       if (!u) return ack(fail('未登录'))
       if (!isServerAdmin(u, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
-      // 电脑控制：九宫格数据。目前仅返回服务器本机；远程客户端电脑需客户端对接后上报填充。
+      // 电脑控制：九宫格数据 = 服务器本机 + 在线远程客户端设备（客户端 app 经 dev:register 上报）
       const nets = os.networkInterfaces()
       const ips: string[] = []
       for (const name of Object.keys(nets)) {
@@ -155,6 +156,20 @@ export function registerAdminUsersHandlers(ctx: { io: Server; store: Store; conf
       const devices = [
         { id: 'local', name: '本机（服务器）', username: 'SERVER_ADMIN', os: os.type() + ' ' + os.release(), ip: ips.join('，') || '127.0.0.1', online: true, remote: false }
       ]
+      // 在线远程客户端（30s 内有心跳视为在线）
+      const now = Date.now()
+      const cutoff = now - 30_000
+      for (const [deviceId, dev] of remoteDevices) {
+        devices.push({
+          id: deviceId,
+          name: dev.name,
+          username: dev.username,
+          os: dev.os,
+          ip: dev.ip,
+          online: dev.lastSeen >= cutoff,
+          remote: true
+        })
+      }
       ack(ok({ devices }))
     })
   })

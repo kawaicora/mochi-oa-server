@@ -46,15 +46,21 @@
     $('dd-name').textContent = d.name || '设备'
     $('dd-meta').textContent = (d.username || '') + ' · ' + (d.os || '') + ' · ' + (d.ip || '')
     if (d.remote) {
-      // 客户端对接的设备：功能占位
-      $('sys-cards').innerHTML = '<div class="empty" style="padding:40px">该设备为远程客户端电脑，控制功能待客户端对接后启用。</div>'
-      $('proc-table').innerHTML = '<div class="empty">待客户端对接</div>'
-      $('exec-out').textContent = '待客户端对接'
-      $('shot-box').innerHTML = '<span class="empty">待客户端对接</span>'
-      $('cam-box').innerHTML = '<span class="empty">待客户端对接</span>'
+      // 远程客户端电脑：复用房间 UI 的远程查看（remote-view.js）
+      $('sys-cards').style.display = 'none'
+      $('sys-disk').style.display = 'none'
+      document.querySelectorAll('#dev-detail .perf-row,#dev-detail .panel-box').forEach((n) => { if (n.id !== 'remote-panel' && n.id !== 'rv-menu') n.style.display = 'none' })
+      $('remote-panel').style.display = ''
+      $('sys-refresh').style.display = 'none'
       if (S._poll) clearInterval(S._poll)
+      A.remoteView.open(d)
       return
     }
+    $('remote-panel').style.display = 'none'
+    $('sys-cards').style.display = ''
+    $('sys-disk').style.display = ''
+    document.querySelectorAll('#dev-detail .perf-row,#dev-detail .panel-box').forEach((n) => { n.style.display = '' })
+    $('sys-refresh').style.display = ''
     S.loadInfo()
     S.loadProcesses()
     S.pollPerf()
@@ -63,6 +69,7 @@
   }
   S.closeDetail = function () {
     if (S._poll) { clearInterval(S._poll); S._poll = null }
+    if (A.remoteView) A.remoteView.stop()
     $('dev-detail').style.display = 'none'
     $('dev-grid-view').style.display = ''
     S.loadDevices()
@@ -160,5 +167,13 @@
     $('exec-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') S.exec() })
     $('shot-btn').onclick = S.shot
     $('cam-btn').onclick = S.cam
+    // 远程查看按钮（remote-view.js）
+    $('rv-cam').onclick = () => { if (A.remoteView) A.remoteView.cam() }
+    $('rv-screen').onclick = () => { if (A.remoteView) A.remoteView.screen() }
+    $('rv-mic').onclick = () => { if (A.remoteView) A.remoteView.mic() }
+    $('rv-stop').onclick = () => { if (A.remoteView) A.remoteView.stop() }
+    $('rv-cam').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.cam() })
+    $('rv-mic').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.mic() })
+    document.addEventListener('click', (e) => { if (!e.target.closest('#rv-menu')) A.remoteView && A.remoteView.hideMenu() })
   }
 })()

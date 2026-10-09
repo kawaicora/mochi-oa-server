@@ -21,6 +21,7 @@ import { registerUploadRoutes } from './files'
 import { registerResetPwdRoutes } from './reset-pwd'
 import { registerAdminRoutes } from './web/admin'
 import { registerSysmonHandlers } from './handlers/sysmon'
+import { registerDevHandlers } from './handlers/dev'
 import { registerAdminUsersHandlers } from './handlers/admin-users'
 import { createMailer } from './mailer'
 import { registerMailHandlers } from './handlers/mail'
@@ -124,6 +125,7 @@ async function main(): Promise<void> {
   registerTaskHandlers({ io, store, config })
   registerProjectMgmtHandlers({ io, store, config })
   registerSysmonHandlers({ io, store, config })
+  registerDevHandlers({ io, store, config })
   registerAdminUsersHandlers({ io, store, config })
 
   // ---- HTTP 上传/文件路由（POST /api/upload、GET /files/*） ----

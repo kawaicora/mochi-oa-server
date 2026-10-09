@@ -27,6 +27,23 @@
     </div>
     <div class="sys-disk"><div class="sc-k">磁盘</div><pre id="s-disk" class="disk-pre">—</pre></div>
 
+    <!-- 远程客户端电脑：远程画面 + 控制栏（复用房间控制逻辑） -->
+    <div class="panel-box" id="remote-panel" style="display:none">
+      <div class="panel-title">远程画面 <span id="rv-state" class="perf-num"></span></div>
+      <div class="rv-stage">
+        <video id="rv-video" autoplay playsinline></video>
+        <div class="rv-empty" id="rv-empty">选择下方设备开始远程查看</div>
+      </div>
+      <div class="rv-bar">
+        <button class="mini-btn primary" id="rv-cam">📷 摄像头</button>
+        <button class="mini-btn primary" id="rv-screen">🖥 屏幕</button>
+        <button class="mini-btn primary" id="rv-mic">🎤 麦克风</button>
+        <button class="mini-btn" id="rv-stop">停止</button>
+        <span class="rv-hint">右键「摄像头/麦克风」选择设备</span>
+      </div>
+    </div>
+    <div id="rv-menu" class="rv-menu" style="display:none"></div>
+
     <div class="perf-row">
       <div class="perf-box">
         <div class="perf-title">CPU 使用率 <span id="perf-cpu-v" class="perf-num">0%</span></div>
