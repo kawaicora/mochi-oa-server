@@ -297,5 +297,64 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       console.log(`[dev] 被控端命令结果 deviceId=${deviceId} ok=${payload.ok} exit=${payload.exitCode} 转发至=${dev.controller || '(无控制端)'}`)
       ack(ok({ deviceId }))
     })
+
+    // 交互终端：控制端 ↔ 被控端 双向转发（打开/输入/输出/关闭）
+    socket.on('dev:termOpen', (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      if (!notSlave(socket)) return ack(fail('被控端连接不可控制设备'))
+      if (!isAdminSocket(socket, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
+      const d = (data ?? {}) as { deviceId?: unknown; shell?: unknown }
+      const deviceId = String(d.deviceId ?? '')
+      const dev = remoteDevices.get(deviceId)
+      if (!dev) return ack(fail('该设备已离线'))
+      dev.controller = socket.id
+      send(dev.socket, 'dev:termOpen', { deviceId, shell: String(d.shell ?? 'auto') })
+      console.log(`[dev] 控制端 ${socket.id} 打开远程终端 <- ${deviceId}（${dev.name}）shell=${String(d.shell ?? 'auto')}`)
+      ack(ok({ deviceId }))
+    })
+    socket.on('dev:termIn', (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      if (!notSlave(socket)) return ack(fail('被控端连接不可控制设备'))
+      if (!isAdminSocket(socket, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
+      const d = (data ?? {}) as { deviceId?: unknown; data?: unknown }
+      const deviceId = String(d.deviceId ?? '')
+      const dev = remoteDevices.get(deviceId)
+      if (!dev) return ack(fail('该设备已离线'))
+      if (dev.controller !== socket.id) return ack(fail('你不是该设备的控制器'))
+      send(dev.socket, 'dev:termIn', { deviceId, data: String(d.data ?? '') })
+      ack(ok({ deviceId }))
+    })
+    socket.on('dev:termOut', (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const d = (data ?? {}) as { deviceId?: unknown; data?: unknown; isErr?: unknown }
+      const deviceId = String(d.deviceId ?? '')
+      const dev = remoteDevices.get(deviceId)
+      if (!dev || dev.socket !== socket) return ack(fail('设备不存在'))
+      if (dev.controller) {
+        const ctrl = io.sockets.sockets.get(dev.controller)
+        if (ctrl) send(ctrl, 'dev:termOut', { deviceId, data: String(d.data ?? ''), isErr: !!d.isErr })
+      }
+      ack(ok({ deviceId }))
+    })
+    socket.on('dev:termClose', (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const d = (data ?? {}) as { deviceId?: unknown; code?: unknown }
+      const deviceId = String(d.deviceId ?? '')
+      const dev = remoteDevices.get(deviceId)
+      if (!dev) return ack(fail('设备不存在'))
+      if (socket.data.isSlave) {
+        // 被控端会话已结束 → 通知控制端
+        if (dev.socket === socket && dev.controller) {
+          const ctrl = io.sockets.sockets.get(dev.controller)
+          if (ctrl) send(ctrl, 'dev:termClose', { deviceId, code: Number(d.code) || 0 })
+        }
+      } else {
+        // 控制端主动关闭终端 → 转发被控端结束会话
+        if (!isAdminSocket(socket, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
+        send(dev.socket, 'dev:termClose', { deviceId })
+        console.log(`[dev] 控制端 ${socket.id} 关闭远程终端 <- ${deviceId}`)
+      }
+      ack(ok({ deviceId }))
+    })
   })
 }
