@@ -14,12 +14,34 @@
   devEl.textContent = '目标：' + deviceId + ' · shell=' + shell
   const token = q.get('token') || localStorage.getItem('vr_token') || ''
 
+  // 流式渲染：一行可能被拆成多个 chunk（tracert/ping 每列小段输出）。
+  // 维护 pending 缓冲，仅在遇到完整换行时落一行；未完整内容拼到当前行，避免一行被拆成多行。
+  let pending = ''
+  let curLine = null
   function append(text, cls) {
     if (!text) return
-    const d = document.createElement('div')
-    d.className = 'term-line' + (cls ? ' ' + cls : '')
-    d.textContent = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-    out.appendChild(d)
+    pending += String(text)
+    const parts = pending.split(/\r\n|\r|\n/)
+    pending = parts.pop() || '' // 最后一段可能是不完整行（尚未换行）
+    for (const p of parts) {
+      if (curLine) { // 之前有不完整行，现在补全
+        curLine.textContent += p
+        curLine = null
+      } else {
+        const d = document.createElement('div')
+        d.className = 'term-line' + (cls ? ' ' + cls : '')
+        d.textContent = p
+        out.appendChild(d)
+      }
+    }
+    if (pending !== '') { // 当前不完整行（光标所在行），持续刷新
+      if (!curLine) {
+        curLine = document.createElement('div')
+        curLine.className = 'term-line' + (cls ? ' ' + cls : '')
+        out.appendChild(curLine)
+      }
+      curLine.textContent = pending
+    }
     out.scrollTop = out.scrollHeight
   }
   function setState(t, cls) { stateEl.textContent = t; stateEl.className = 'term-state' + (cls ? ' ' + cls : '') }
