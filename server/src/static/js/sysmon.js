@@ -178,5 +178,12 @@
     $('rv-cam').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.cam() })
     $('rv-mic').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.mic() })
     document.addEventListener('click', (e) => { if (!e.target.closest('#rv-menu')) A.remoteView && A.remoteView.hideMenu() })
+    // 设备列表自动刷新（每 5s）：客户端上线/离线实时反映，无需手动点"刷新"；
+    // 仅当停留在设备列表视图时刷新，避免详情页被反复重绘。
+    if (S._autoTimer) clearInterval(S._autoTimer)
+    S._autoTimer = setInterval(() => {
+      const g = $('dev-grid-view')
+      if (g && g.style.display !== 'none' && !S._poll) S.loadDevices()
+    }, 5000)
   }
 })()

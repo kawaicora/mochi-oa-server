@@ -53,6 +53,45 @@ function send(socket: Socket, evt: string, payload: unknown): void {
   if (socket.connected) socket.emit(evt, payload)
 }
 
+/**
+ * upsert 设备记录：按 deviceId 幂等——已有则更新（含 socket，重连后新 socket 覆盖，避免后续事件被"设备不在线/socket不匹配"丢弃）；
+ * 没有则用传入信息 + socket 认证用户新建。返回设备或 null（缺 deviceId）。
+ */
+function upsertDev(socket: Socket, info: { deviceId: string; name?: string; os?: string; ip?: string; username?: string }): RemoteDevice | null {
+  const { deviceId } = info
+  if (!deviceId) return null
+  const existing = remoteDevices.get(deviceId)
+  if (existing) {
+    existing.lastSeen = Date.now()
+    if (existing.socket !== socket) {
+      existing.socket = socket // 重连/迁移：绑定到新 socket
+      socket.data.deviceId = deviceId
+      socket.data.isSlave = true
+    }
+    if (info.name) existing.name = info.name
+    if (info.os) existing.os = info.os
+    if (info.ip) existing.ip = info.ip
+    if (info.username) existing.username = info.username
+    return existing
+  }
+  const u = (socket.data.auth as AuthUser | null) ?? null
+  const dev: RemoteDevice = {
+    deviceId,
+    socket,
+    name: (info.name || '电脑').slice(0, 64),
+    os: (info.os || '').slice(0, 128),
+    ip: (info.ip || '').slice(0, 128),
+    username: (info.username || u?.nick || u?.username || '电脑').slice(0, 64),
+    userId: u?.id ?? 0,
+    lastSeen: Date.now()
+  }
+  socket.data.deviceId = deviceId
+  socket.data.isSlave = true
+  remoteDevices.set(deviceId, dev)
+  console.log(`[dev] 被控端上线 deviceId=${deviceId} name=${dev.name} os=${dev.os} ip=${dev.ip} user=${dev.username} socket=${socket.id}（当前在线 ${remoteDevices.size} 台）`)
+  return dev
+}
+
 export function registerDevHandlers(ctx: { io: Server; store: Store; config: ServerConfig }): void {
   const { io, config } = ctx
 
@@ -70,7 +109,7 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
         name: String(d.name ?? '电脑').slice(0, 64),
         os: String(d.os ?? '').slice(0, 128),
         ip: String(d.ip ?? '').slice(0, 128),
-        username: String(d.username ?? u.nick ?? u.username).slice(0, 64),
+        username: String(d.username || u?.nick || u?.username || '电脑').slice(0, 64),
         userId: u.id,
         lastSeen: Date.now(),
         controller: devByDeviceId(deviceId)?.controller
@@ -85,19 +124,26 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
     })
 
     socket.on('dev:heartbeat', (data: unknown) => {
-      const d = (data ?? {}) as { deviceId?: unknown }
+      // upsert：没有就添加（心跳带完整设备信息，客户端在 hbTimer 里已带上 name/os/ip/username），有就更新
+      const d = (data ?? {}) as { deviceId?: unknown; name?: unknown; os?: unknown; ip?: unknown; username?: unknown }
       const deviceId = String(d.deviceId ?? '')
-      const dev = remoteDevices.get(deviceId)
-      if (dev && dev.socket === socket) dev.lastSeen = Date.now()
+      if (!deviceId) return
+      upsertDev(socket, {
+        deviceId,
+        name: String(d.name ?? ''),
+        os: String(d.os ?? ''),
+        ip: String(d.ip ?? ''),
+        username: String(d.username ?? '')
+      })
     })
 
-    // 被控端上报枚举设备 → 转发给控制端
+    // 被控端上报枚举设备 → 转发给控制端（upsert 建立/更新设备）
     socket.on('dev:devices', (data: unknown, cb?: Ack) => {
       const ack = cb ?? (() => {})
       const d = (data ?? {}) as { deviceId?: unknown; cams?: unknown; mics?: unknown }
       const deviceId = String(d.deviceId ?? '')
-      const dev = remoteDevices.get(deviceId)
-      if (!dev || dev.socket !== socket) { console.log(`[dev] dev:devices 设备不存在或 socket 不匹配 deviceId=${deviceId}`); return ack(fail('设备不存在')) }
+      const dev = upsertDev(socket, { deviceId })
+      if (!dev) { console.log(`[dev] dev:devices 无 deviceId deviceId=${deviceId}`); return ack(fail('缺少设备号')) }
       const payload = { deviceId, cams: d.cams ?? [], mics: d.mics ?? [] }
       if (dev.controller) {
         const ctrl = io.sockets.sockets.get(dev.controller)
@@ -107,12 +153,12 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       ack(ok({ deviceId }))
     })
 
-    // 被控端上报系统信息（实时同步电脑状态）→ 存快照并转发给控制端
+    // 被控端上报系统信息（实时同步电脑状态）→ upsert + 存快照并转发给控制端
     socket.on('dev:sys', (data: unknown) => {
       const d = (data ?? {}) as { deviceId?: unknown; info?: unknown; perf?: unknown }
       const deviceId = String(d.deviceId ?? '')
-      const dev = remoteDevices.get(deviceId)
-      if (!dev || dev.socket !== socket) { console.log(`[dev] dev:sys 丢弃 deviceId=${deviceId}（设备不在线或 socket 不匹配）`); return }
+      const dev = upsertDev(socket, { deviceId, username: String((d.info as { user?: unknown } | undefined)?.user ?? '') })
+      if (!dev) return
       const perf = (d.perf ?? {}) as { cpu?: unknown; memPercent?: unknown }
       dev.lastSeen = Date.now()
       dev.sys = { info: (d.info ?? {}) as Record<string, unknown>, perf: (d.perf ?? {}) as Record<string, unknown>, ts: Date.now() }
