@@ -103,24 +103,17 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       const deviceId = String(d.deviceId ?? '').trim()
       const u = (socket.data.auth as AuthUser | null) ?? null
       if (!deviceId || !u) { console.log(`[dev] dev:register 拒绝（deviceId=${deviceId || '(空)'} 登录=${!!u}）socket=${socket.id}`); return ack(fail('参数不合法')) }
-      const dev: RemoteDevice = {
+      const existing = remoteDevices.get(deviceId)
+      const dev = upsertDev(socket, {
         deviceId,
-        socket,
-        name: String(d.name ?? '电脑').slice(0, 64),
-        os: String(d.os ?? '').slice(0, 128),
-        ip: String(d.ip ?? '').slice(0, 128),
-        username: String(d.username || u?.nick || u?.username || '电脑').slice(0, 64),
-        userId: u.id,
-        lastSeen: Date.now(),
-        controller: devByDeviceId(deviceId)?.controller
-      }
-      remoteDevices.set(deviceId, dev)
-      socket.data.deviceId = deviceId
-      socket.data.isSlave = true
-      // 清理同名/同 socket 旧记录
-      for (const [k, v] of remoteDevices) if (v.socket === socket && k !== deviceId) remoteDevices.delete(k)
-      console.log(`[dev] 被控端上线 deviceId=${deviceId} name=${dev.name} os=${dev.os} ip=${dev.ip} user=${dev.username} socket=${socket.id}（当前在线 ${remoteDevices.size} 台）`)
-      ack(ok({ deviceId }))
+        name: String(d.name ?? ''),
+        os: String(d.os ?? ''),
+        ip: String(d.ip ?? ''),
+        username: String(d.username ?? '')
+      })
+      if (!dev) return ack(fail('参数不合法'))
+      console.log(`[dev] 被控端 ${existing ? '更新(updated)' : '注册(added)'} deviceId=${deviceId} name=${dev.name} os=${dev.os} ip=${dev.ip} user=${dev.username} socket=${socket.id}（当前在线 ${remoteDevices.size} 台）`)
+      ack(ok({ deviceId, status: existing ? 'updated' : 'added' }))
     })
 
     socket.on('dev:heartbeat', (data: unknown) => {
@@ -155,19 +148,23 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
     })
 
     // 被控端上报系统信息（实时同步电脑状态）→ upsert + 存快照并转发给控制端
-    socket.on('dev:sys', (data: unknown) => {
+    // 协议：客户端动态包 → 设备已注册且有完整基础信息(os/ip) → ack updated；否则 ack lost（客户端将重发全量 register）
+    socket.on('dev:sys', (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
       const d = (data ?? {}) as { deviceId?: unknown; info?: unknown; perf?: unknown }
       const deviceId = String(d.deviceId ?? '')
       const dev = upsertDev(socket, { deviceId, username: String((d.info as { user?: unknown } | undefined)?.user ?? '') })
-      if (!dev) return
+      if (!dev) return ack(fail('缺少设备号'))
+      const complete = !!(dev.os && dev.ip) // 完整基础信息（name 有兜底；以 os/ip 判定是否已全量注册）
       const perf = (d.perf ?? {}) as { cpu?: unknown; memPercent?: unknown }
       dev.lastSeen = Date.now()
       dev.sys = { info: (d.info ?? {}) as Record<string, unknown>, perf: (d.perf ?? {}) as Record<string, unknown>, ts: Date.now() }
-      console.log(`[dev] 被控端系统上报 deviceId=${deviceId} cpu=${perf.cpu ?? '?'}% mem=${perf.memPercent ?? '?'}% 转发至=${dev.controller || '(无控制端)'}`)
+      console.log(`[dev] 被控端系统上报 deviceId=${deviceId} cpu=${perf.cpu ?? '?'}% mem=${perf.memPercent ?? '?'}% 状态=${complete ? 'updated' : 'lost'} 转发至=${dev.controller || '(无控制端)'}`)
       if (dev.controller) {
         const ctrl = io.sockets.sockets.get(dev.controller)
         if (ctrl) send(ctrl, 'dev:sys', { deviceId, info: d.info, perf: d.perf })
       }
+      ack(ok({ deviceId, status: complete ? 'updated' : 'lost' }))
     })
 
     // ── 信令：按角色分发（被控端→控制端 / 控制端→被控端），避免双分支双 ack ──
@@ -264,8 +261,4 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       ack(ok({ deviceId }))
     })
   })
-}
-
-function devByDeviceId(deviceId: string): RemoteDevice | undefined {
-  return remoteDevices.get(deviceId)
 }
