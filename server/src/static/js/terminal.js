@@ -24,8 +24,8 @@
     const parts = pending.split(/\r\n|\r|\n/)
     pending = parts.pop() || '' // 最后一段可能是不完整行（尚未换行）
     for (const p of parts) {
-      if (curLine) { // 之前有不完整行，现在补全
-        curLine.textContent += p
+      if (curLine) { // 之前有不完整行：parts[0] 已含旧 pending（整行累积），用覆盖而非追加，避免重复显示
+        curLine.textContent = p
         curLine = null
       } else {
         const d = document.createElement('div')
