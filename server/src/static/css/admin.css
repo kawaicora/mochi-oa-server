@@ -48,9 +48,18 @@ input:focus{border-color:#4a6cf7}
 .rt-conf{background:#16331f;color:#a9e0b8}
 .rt-group{background:#23304f;color:#a9c0ff}
 .rt-dm{background:#3a1f2e;color:#ffb3d1}
+.rt-perm{background:#3a2a1a;color:#ffd9a8}
 .room-title{font-size:15px;font-weight:600;margin-bottom:6px;word-break:break-all}
 .room-meta{font-size:12px;color:#9aa0ae;line-height:1.8}
 .room-join{margin-top:12px;text-align:center;font-size:13px;color:#7b96ff}
+.room-create{background:#151923;border:1px solid #2a2f3d;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.room-create-title{font-size:13px;color:#9aa0ae;margin-bottom:10px}
+.room-create-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
+.room-create-row select,.room-create-row input{background:#1a1e28;border:1px solid #2a2f3d;color:#e6e9f0;border-radius:8px;padding:8px 10px;font-size:13px}
+.room-create-row input{flex:1 1 220px}
+.mini-btn{background:#1a1e28;border:1px solid #2a2f3d;color:#e6e9f0;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer}
+.mini-btn.primary{background:#4a6cf7;border-color:#4a6cf7;color:#fff}
+.mini-btn:hover{border-color:#4a6cf7}
 
 /* ═══ 通话界面 ═══ */
 .call-root{height:calc(100vh - 56px);display:flex;flex-direction:column;background:#0d1117;overflow:hidden;position:relative}

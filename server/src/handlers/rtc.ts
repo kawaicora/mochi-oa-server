@@ -13,7 +13,7 @@ export interface RtcCtx {
 }
 
 export type RtcKind = 'video' | 'voice'
-type RtcType = 'dm' | 'conf' | 'group'
+type RtcType = 'dm' | 'conf' | 'group' | 'perm'
 
 /**
  * WebRTC 信令房间（内存态）。
@@ -128,11 +128,12 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
     if (socket.data.rtc && (socket.data.rtc as { userId: number }).userId) socket.data.rtc = undefined
   }
 
-  /** 离开后若房间空 → 结束会话：会议开始后即结束则删除会议号；dm/group 空房即删 */
+  /** 离开后若房间空 → 结束会话：会议开始后即结束则删除会议号；dm/group 空房即删；perm（永久房间，K歌房等）空房不删 */
   function cleanupIfEmpty(rtcId: string): void {
     const r = rooms.get(rtcId)
     if (!r) return
     if (peersInfo(rtcId).length > 0) return
+    if (r.type === 'perm') { broadcastRoomsChanged(); return } // 永久房间：没人也常驻，不自动删除
     r.ended = true
     rooms.delete(rtcId)
     broadcastRoomsChanged()
@@ -240,6 +241,55 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
         broadcastRoomsChanged()
         ack(ok({ meeting: view(session), scheduled: false, peers: peersInfo(meetingNo).filter((p) => p.socketId !== socket.id), iceServers: await getIceServers(config) }))
       }
+    })
+
+    // ─── 管理后台创建房间（SERVER_ADMIN）：会议(conf)/群聊(group)/永久(perm，空房不删，供 K歌房常驻) ───
+    // 标题规则：留空时 会议=会议号、群聊=群名、永久=自定义必填
+    socket.on('rtc:createRoom', async (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const u = authed(socket)
+      if (!u) return ack(fail('未登录'))
+      if (!isServerAdmin(u, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
+      const d = (data ?? {}) as { type?: unknown; title?: unknown; kind?: unknown; groupId?: unknown; password?: unknown }
+      const type: RtcType = d.type === 'group' || d.type === 'perm' ? d.type : 'conf'
+      const kind: RtcKind = d.kind === 'voice' ? 'voice' : 'video'
+      const password = typeof d.password === 'string' && d.password ? d.password.slice(0, 32) : undefined
+      let title = typeof d.title === 'string' && d.title.trim() ? d.title.trim().slice(0, 64) : undefined
+      let rtcId = ''
+      let groupId: number | undefined
+      if (type === 'conf') {
+        rtcId = makeMeetingNo()
+        if (!title) title = rtcId // 会议默认标题 = 会议号
+      } else if (type === 'group') {
+        const gid = Number(d.groupId)
+        if (!Number.isInteger(gid) || gid <= 0) return ack(fail('群聊房间需选择群'))
+        const g = await store.getGroupById(gid).catch(() => null)
+        if (!g) return ack(fail('群不存在'))
+        groupId = gid
+        rtcId = 'group:' + gid
+        if (rooms.has(rtcId)) return ack(fail('该群已有进行中的群通话'))
+        if (!title) title = g.name // 群聊默认标题 = 群名
+      } else {
+        if (!title) return ack(fail('永久房间需要填写标题'))
+        rtcId = 'perm:' + Date.now() + ':' + Math.floor(Math.random() * 1000)
+      }
+      const session: RtcSession = {
+        rtcId,
+        type,
+        kind,
+        meetingNo: type === 'conf' ? rtcId : undefined,
+        title,
+        password,
+        hostId: u.id,
+        groupId,
+        createdAt: Date.now(),
+        startedAt: Date.now(), // 创建即显示在列表；perm 空房也常驻
+        ended: false
+      }
+      rooms.set(rtcId, session)
+      broadcastRoomsChanged()
+      console.log(`[rtc:createRoom] admin=${u.id} type=${type} room=${rtcId} title=${title ?? ''} kind=${kind}`)
+      ack(ok({ room: view(session) }))
     })
 
     // ─── 查询会议信息（预约会议按会议号查） ───

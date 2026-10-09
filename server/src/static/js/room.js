@@ -48,18 +48,18 @@
     $('room-count').textContent = rooms.length
     const grid = $('room-grid')
     grid.innerHTML = ''
-    const typeMap = { conf: ['会议', 'rt-conf'], dm: ['私聊通话', 'rt-dm'], group: ['群通话', 'rt-group'] }
+    const typeMap = { conf: ['会议', 'rt-conf'], dm: ['私聊通话', 'rt-dm'], group: ['群通话', 'rt-group'], perm: ['永久房间', 'rt-perm'] }
     for (const r of rooms) {
       const [tn, tc] = typeMap[r.type] || [r.type, 'rt-conf']
       const el = document.createElement('div')
       el.className = 'room-card'
-      const title = r.title || (r.type === 'group' ? '群通话' : r.type === 'dm' ? '私聊通话' : '视频会议')
-      const no = r.meetingNo ? ('会议号 ' + r.meetingNo) : (r.type === 'group' ? ('群 #' + r.groupId) : r.id)
-      const started = new Date(r.startedAt).toLocaleTimeString()
+      const title = r.title || (r.type === 'group' ? '群通话' : r.type === 'dm' ? '私聊通话' : r.type === 'perm' ? '永久房间' : '视频会议')
+      const no = r.meetingNo ? ('会议号 ' + r.meetingNo) : (r.type === 'group' ? ('群 #' + r.groupId) : r.type === 'perm' ? '常驻 · 不自动删除' : r.id)
+      const started = r.startedAt ? new Date(r.startedAt).toLocaleTimeString() : ''
       el.innerHTML =
         '<span class="room-type ' + tc + '">' + tn + '</span>' +
         '<div class="room-title">' + esc(title) + '</div>' +
-        '<div class="room-meta">' + esc(no) + (r.hasPassword ? ' · 🔒' : '') + ' · 👥 ' + r.peerCount + ' · 始于 ' + started + '</div>' +
+        '<div class="room-meta">' + esc(no) + (r.hasPassword ? ' · 🔒' : '') + ' · 👥 ' + r.peerCount + (started ? ' · 始于 ' + started : '') + '</div>' +
         '<div class="room-join">点击加入 →</div>'
       el.onclick = () => R.open(r)
       grid.appendChild(el)
@@ -480,6 +480,38 @@
   A.room.onSignal = function (d) { if (R.currentRoom && d.room === R.currentRoom.id) R.engine && R.engine.handleSignal(d.from.userId, d.signal) }
   A.room.onEnded = function (d) { if (R.currentRoom && d.room === R.currentRoom.id) { A.toast('会议已结束'); R.leaveCall(true) } }
   A.room.onChatMessage = function (d) { if (R.currentRoom && d.room === R.currentRoom.id && d.from.userId !== A.myUserId) pushChat(d.from.nick || '用户', d.content, false, d.from.avatar) }
+
+  // ─── 创建房间（会议/群聊/永久）───
+  const $rc = (id) => document.getElementById(id)
+  $rc('room-create-btn').onclick = () => { $rc('room-create').style.display = $rc('room-create').style.display === 'none' ? '' : 'none' }
+  $rc('rc-cancel').onclick = () => { $rc('room-create').style.display = 'none' }
+  $rc('rc-type').onchange = async () => {
+    const t = $rc('rc-type').value
+    $rc('rc-group').style.display = t === 'group' ? '' : 'none'
+    if (t === 'group' && !$rc('rc-group').dataset.loaded) {
+      const ack = await A.emit('group:search', {}).catch(() => ({ ok: false }))
+      if (ack.ok && ack.groups && ack.groups.length) {
+        const sel = $rc('rc-group'); sel.innerHTML = '<option value="">— 选择群 —</option>'
+        ack.groups.forEach((g) => { const o = document.createElement('option'); o.value = g.id; o.textContent = (g.name || ('群 #' + g.id)) + (g.memberCount != null ? '（' + g.memberCount + '人）' : ''); sel.appendChild(o) })
+        sel.dataset.loaded = '1'
+      } else { $rc('rc-group').innerHTML = '<option value="">（无群可选）</option>' }
+    }
+  }
+  $rc('rc-submit').onclick = async () => {
+    const type = $rc('rc-type').value
+    const title = $rc('rc-title').value.trim()
+    const kind = $rc('rc-kind').value
+    const groupId = type === 'group' ? Number($rc('rc-group').value) : undefined
+    if (type === 'group' && !groupId) { A.toast('群聊房间请选择群'); return }
+    const payload = { type, kind, title }
+    if (type === 'group') payload.groupId = groupId
+    const ack = await A.emit('rtc:createRoom', payload).catch(() => ({ ok: false, error: '创建失败' }))
+    if (!ack.ok) { A.toast(ack.error || '创建失败'); return }
+    A.toast('房间已创建')
+    $rc('room-create').style.display = 'none'
+    $rc('rc-title').value = ''
+    R.load()
+  }
 
   R.init = function () {
     if (R._inited) return
