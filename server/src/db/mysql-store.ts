@@ -278,11 +278,12 @@ export class MySqlStore implements Store {
     return m ? toUser(m) : null
   }
 
-  async updateUserProfile(userId: number, patch: { nick?: string; avatar?: string; phone?: string; extra?: string }): Promise<void> {
+  async updateUserProfile(userId: number, patch: { nick?: string; avatar?: string; phone?: string; email?: string; extra?: string }): Promise<void> {
     const fields: Record<string, string | null> = {}
     if (patch.nick !== undefined) fields.nick = patch.nick
     if (patch.avatar !== undefined) fields.avatar = patch.avatar
     if (patch.phone !== undefined) fields.phone = patch.phone
+    if (patch.email !== undefined) fields.email = patch.email
     if (patch.extra !== undefined) fields.extra = patch.extra
     if (Object.keys(fields).length === 0) return
     await UserModel.update(fields, { where: { id: userId } })

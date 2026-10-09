@@ -19,7 +19,9 @@ import { registerOrgHandlers } from './handlers/org'
 import { registerRtcHandlers } from './handlers/rtc'
 import { registerUploadRoutes } from './files'
 import { registerResetPwdRoutes } from './reset-pwd'
-import { registerViewRoomRoutes } from './view-room'
+import { registerAdminRoutes } from './web/admin'
+import { registerSysmonHandlers } from './handlers/sysmon'
+import { registerAdminUsersHandlers } from './handlers/admin-users'
 import { createMailer } from './mailer'
 import { registerMailHandlers } from './handlers/mail'
 import { registerHolidayHandlers, seedHolidays } from './handlers/holiday'
@@ -121,6 +123,8 @@ async function main(): Promise<void> {
   registerHolidayHandlers({ io, store, config })
   registerTaskHandlers({ io, store, config })
   registerProjectMgmtHandlers({ io, store, config })
+  registerSysmonHandlers({ io, store, config })
+  registerAdminUsersHandlers({ io, store, config })
 
   // ---- HTTP 上传/文件路由（POST /api/upload、GET /files/*） ----
   registerUploadRoutes(http, store, config)
@@ -128,8 +132,8 @@ async function main(): Promise<void> {
   // ---- 忘记密码：GET/POST /view/reset-pwd（服务端渲染重置密码页；改密成功后断开其在线会话） ----
   registerResetPwdRoutes(http, store, io)
 
-  // ---- 会议大厅网页端：GET /view/room（登录 + 进行中会议列表 + WebRTC 加入/通话） ----
-  registerViewRoomRoutes(http, store, io, config)
+  // ---- 管理后台网页端：GET /view/admin（登录 + 房间 + 已登录电脑控制 + 用户管理；/view/room 301 到此） ----
+  registerAdminRoutes(http, store, io, config)
 
   // ---- 在线状态：连接上线 / 断线下线 ----
   io.on('connection', (socket) => {

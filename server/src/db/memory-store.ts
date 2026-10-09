@@ -97,12 +97,13 @@ export class MemoryStore implements Store {
     return u ? this.publicUser(u) : null
   }
 
-  async updateUserProfile(userId: number, patch: { nick?: string; avatar?: string; phone?: string; extra?: string }): Promise<void> {
+  async updateUserProfile(userId: number, patch: { nick?: string; avatar?: string; phone?: string; email?: string; extra?: string }): Promise<void> {
     const u = this.users.get(userId)
     if (!u) throw new NotFoundError('user not found')
     if (patch.nick !== undefined) u.nick = patch.nick
     if (patch.avatar !== undefined) u.avatar = patch.avatar
     if (patch.phone !== undefined) u.phone = patch.phone
+    if (patch.email !== undefined) u.email = patch.email
     if (patch.extra !== undefined) u.extra = patch.extra
   }
 

@@ -68,7 +68,7 @@ export interface Store {
   getUserByEmail(email: string): Promise<UserWithPassword | null>
   getUserById(id: number): Promise<User | null>
   listUsers(): Promise<User[]>
-  updateUserProfile(userId: number, patch: { nick?: string; avatar?: string; phone?: string; extra?: string }): Promise<void>
+  updateUserProfile(userId: number, patch: { nick?: string; avatar?: string; phone?: string; email?: string; extra?: string }): Promise<void>
   /** 更新密码散列（修改密码用） */
   updateUserPassword(userId: number, passwordHash: string): Promise<void>
 
