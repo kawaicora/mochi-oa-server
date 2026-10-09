@@ -191,6 +191,14 @@
     $('proc-refresh').onclick = S.loadProcesses
     $('exec-run').onclick = S.exec
     $('exec-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') S.exec() })
+    $('term-open').onclick = () => {
+      const d = S.currentDevice
+      if (!d) return
+      const shell = ($('exec-shell')?.value || 'auto')
+      const url = '/view/admin/terminal?deviceId=' + encodeURIComponent(d.id) + '&shell=' + encodeURIComponent(shell)
+      const w = window.open(url, '_blank')
+      if (!w) A.toast('浏览器拦截了弹窗，请允许本网站弹出窗口后重试（也可复制链接手动打开）')
+    }
     $('shot-btn').onclick = S.shot
     $('cam-btn').onclick = S.cam
     S.bindExecResult()
@@ -200,6 +208,13 @@
     $('rv-mic').onclick = () => { if (A.remoteView) A.remoteView.mic() }
     $('rv-stop').onclick = () => { if (A.remoteView) A.remoteView.stop() }
     $('rv-pip').onclick = () => { if (A.remoteView) A.remoteView.pip() }
+    $('rv-win').onclick = () => {
+      const d = S.currentDevice
+      if (!d) return
+      const url = '/view/admin/remote-window?deviceId=' + encodeURIComponent(d.id)
+      const w = window.open(url, '_blank', 'width=980,height=720')
+      if (!w) A.toast('浏览器拦截了弹窗，请允许本网站弹出窗口后重试')
+    }
     $('rv-cam').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.cam() })
     $('rv-mic').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.mic() })
     document.addEventListener('click', (e) => { if (!e.target.closest('#rv-menu')) A.remoteView && A.remoteView.hideMenu() })

@@ -167,6 +167,19 @@ export function registerAdminRoutes(http: HttpServer, _store: unknown, _io: Serv
       return
     }
 
+    // ── 独立远程控制窗口页（远程画面 + 控制栏）──
+    if (pathname === '/view/admin/remote-window') {
+      if (req.method !== 'GET') { res.writeHead(405, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('仅支持 GET'); return }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+      try {
+        res.end(readTemplate(templatesDir(), 'remote-window.html'))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' })
+        res.end('模板加载失败：' + (e instanceof Error ? e.message : String(e)))
+      }
+      return
+    }
+
     if (pathname !== PAGE) return
     if (req.method !== 'GET') { res.writeHead(405, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('仅支持 GET'); return }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })

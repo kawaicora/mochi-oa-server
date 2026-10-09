@@ -81,47 +81,47 @@
   function fmtProcs(procs) { return (procs || []).map((p) => (p.name || '') + '  PID:' + (p.pid || '') + '  内存:' + (p.mem != null ? p.mem + 'MB' : '—') + '  CPU:' + (p.cpu != null ? p.cpu + 's' : '—')).join('\n') || '—' }
   RV._renderSys = function (info) {
     if (!info) return
-    const $ = (id) => document.getElementById(id)
-    $('s-host').textContent = info.hostname || '—'
+    function setTxt(id, val) { const el = document.getElementById(id); if (el) el.textContent = val }
+    setTxt('s-host', info.hostname || '—')
     const ips = (info.ips || []).filter((i) => !i.internal).map((i) => i.address + ' (' + i.name + ')')
-    $('s-ip').textContent = ips.length ? ips.join('，') : ((info.ips || []).map((i) => i.address).join('，') || '—')
-    $('s-os').textContent = (info.type || '') + ' ' + (info.release || '') + ' ' + (info.arch || '')
-    $('s-cpu').textContent = (info.cpuModel || '—') + ' · ' + (info.cpuCores || 0) + ' 核'
-    $('s-mem').textContent = gb(info.totalMem)
-    $('s-board').textContent = info.board || '—'
-    $('s-gpu').textContent = (info.gpuInfo || []).map((g) => g.name || '').filter(Boolean).join(' / ') || info.gpu || '—'
-    $('s-uptime').textContent = uptime(info.uptime)
+    setTxt('s-ip', ips.length ? ips.join('，') : ((info.ips || []).map((i) => i.address).join('，') || '—'))
+    setTxt('s-os', (info.type || '') + ' ' + (info.release || '') + ' ' + (info.arch || ''))
+    setTxt('s-cpu', (info.cpuModel || '—') + ' · ' + (info.cpuCores || 0) + ' 核')
+    setTxt('s-mem', gb(info.totalMem))
+    setTxt('s-board', info.board || '—')
+    setTxt('s-gpu', (info.gpuInfo || []).map((g) => g.name || '').filter(Boolean).join(' / ') || info.gpu || '—')
+    setTxt('s-uptime', uptime(info.uptime))
     // 磁盘圆饼（fs 结构化，v2.9.88 起客户端上报）
     const fs = info.fs || []
     const diskTotal = fs.reduce((s, f) => s + (f.size || 0), 0)
     const diskUsed = fs.reduce((s, f) => s + (f.used || 0), 0)
-    drawPie($('pie-disk'), diskUsed, diskTotal, '#f0a14a')
-    $('disk-tip').textContent = fs.length
+    drawPie(document.getElementById('pie-disk'), diskUsed, diskTotal, '#f0a14a')
+    setTxt('disk-tip', fs.length
       ? fs.map((f) => (f.mount || '') + '  ' + Math.round((f.used || 0) / 1073741824) + 'GB/' + Math.round((f.size || 0) / 1073741824) + 'GB（' + (f.use || 0) + '%）').join('\n')
-      : (info.disk || '—')
+      : (info.disk || '—'))
     // 内存圆饼
-    drawPie($('pie-mem'), (info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '#00c88a')
-    $('mem-tip').textContent = pieTip((info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '内存')
-    $('s-disk').textContent = info.disk || '—'
-    $('s-memdetail').textContent = fmtMem(info.memDetail)
-    $('s-gpuinfo').textContent = fmtGpuInfo(info.gpuInfo)
-    $('s-devices').textContent = fmtDevices(info.devices)
-    $('s-procs').textContent = fmtProcs(info.processes)
+    drawPie(document.getElementById('pie-mem'), (info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '#00c88a')
+    setTxt('mem-tip', pieTip((info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '内存'))
+    setTxt('s-disk', info.disk || '—')
+    setTxt('s-memdetail', fmtMem(info.memDetail))
+    setTxt('s-gpuinfo', fmtGpuInfo(info.gpuInfo))
+    setTxt('s-devices', fmtDevices(info.devices))
+    setTxt('s-procs', fmtProcs(info.processes))
   }
   RV._renderPerf = function (perf) {
     if (!perf) return
-    const $ = (id) => document.getElementById(id)
+    function setTxt(id, val) { const el = document.getElementById(id); if (el) el.textContent = val }
     if (perf.cpu != null) { RV.cpuHist.push(perf.cpu); if (RV.cpuHist.length > 80) RV.cpuHist.shift() }
     if (perf.memPercent != null) { RV.memHist.push(perf.memPercent); if (RV.memHist.length > 80) RV.memHist.shift() }
-    $('perf-cpu-v').textContent = (perf.cpu != null ? perf.cpu + '%' : '—')
-    $('perf-mem-v').textContent = (perf.memPercent != null ? perf.memPercent + '%' : '—') + (perf.memUsed != null && perf.memTotal != null ? '（' + mb(perf.memUsed) + ' / ' + gb(perf.memTotal) + '）' : '')
+    setTxt('perf-cpu-v', (perf.cpu != null ? perf.cpu + '%' : '—'))
+    setTxt('perf-mem-v', (perf.memPercent != null ? perf.memPercent + '%' : '—') + (perf.memUsed != null && perf.memTotal != null ? '（' + mb(perf.memUsed) + ' / ' + gb(perf.memTotal) + '）' : ''))
     if (perf.memUsed != null && perf.memTotal != null) {
-      drawPie($('pie-mem'), perf.memUsed, perf.memTotal, '#00c88a')
-      $('mem-tip').textContent = pieTip(perf.memUsed, perf.memTotal, '内存')
+      drawPie(document.getElementById('pie-mem'), perf.memUsed, perf.memTotal, '#00c88a')
+      setTxt('mem-tip', pieTip(perf.memUsed, perf.memTotal, '内存'))
     }
-    drawLine($('perf-cpu'), RV.cpuHist, '#4a6cf7', 100)
-    drawLine($('perf-mem'), RV.memHist, '#00c88a', 100)
-    if (perf.gpus) $('s-gpuload').textContent = perf.gpus.map((g) => (g.name || 'GPU') + ' : ' + (g.load != null ? g.load + '%' : '—')).join('\n') || '—'
+    drawLine(document.getElementById('perf-cpu'), RV.cpuHist, '#4a6cf7', 100)
+    drawLine(document.getElementById('perf-mem'), RV.memHist, '#00c88a', 100)
+    if (perf.gpus) setTxt('s-gpuload', perf.gpus.map((g) => (g.name || 'GPU') + ' : ' + (g.load != null ? g.load + '%' : '—')).join('\n') || '—')
   }
 
   function bind() {
@@ -181,10 +181,10 @@
         cpuModel: undefined, cpuCores: 0, totalMem: undefined, board: '', gpu: '', uptime: undefined, disk: '等待客户端上报系统信息…'
       })
       RV._renderPerf(null)
-      const $e = (id) => document.getElementById(id)
-      $e('perf-cpu-v').textContent = '—'
-      $e('perf-mem-v').textContent = '—'
-      $e('s-disk').textContent = '等待客户端上报系统信息…'
+      const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val }
+      setTxt('perf-cpu-v', '—')
+      setTxt('perf-mem-v', '—')
+      setTxt('s-disk', '等待客户端上报系统信息…')
     }
     A.emit('dev:enumerate', { deviceId: RV.deviceId })
   }
