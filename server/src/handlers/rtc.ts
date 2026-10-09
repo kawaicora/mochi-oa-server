@@ -287,11 +287,17 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       await addSocket(socket, roomId, u)
       socket.to(rtcRoom(roomId)).emit('rtc:peerJoined', { room: roomId, peer: peerOf(socket) })
       broadcastRoomsChanged()
+      const iceServers = (await getIceServers(config)) as IceServer[]
+      const peers = peersInfo(roomId).filter((p) => p.socketId !== socket.id)
+      console.log(
+        '[rtc:join] user=' + u.id + ' room=' + roomId + ' type=' + (r.type ?? '?') + ' 已有成员=' + peers.length +
+        ' iceServers=' + (iceServers.map((s) => (Array.isArray(s.urls) ? (s.urls as string[]).join(',') : String(s.urls))).join(' | ') || '(none)')
+      )
       ack(
         ok({
           room: view(r),
-          peers: peersInfo(roomId).filter((p) => p.socketId !== socket.id),
-          iceServers: (await getIceServers(config)) as IceServer[],
+          peers,
+          iceServers,
           started: wasStarted
         })
       )
@@ -312,7 +318,18 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       let sigDetail = ''
       if (sigType === 'ice') sigDetail = String((raw as { candidate?: unknown }).candidate ?? '')
       else if (sigType === 'offer' || sigType === 'answer') sigDetail = 'sdpLen=' + String((raw as { sdp?: unknown }).sdp ?? '').length
-      console.log('[rtc:signal] from user=' + u.id + ' room=' + roomId + ' type=' + sigType + (sigDetail ? ' ' + sigDetail : ''))
+      // 转发范围（房间内其他成员数）与 ICE candidate 详情（类型/地址/中转服务器）
+      const targetSize = io.sockets.adapter.rooms?.get(rtcRoom(roomId))?.size ?? 0
+      let candDetail = ''
+      if (sigType === 'ice') {
+        const cand = String((raw as { candidate?: unknown }).candidate ?? '')
+        const typ = cand.match(/typ\s+(\w+)/)?.[1] ?? '?'
+        const addr = cand.split(' ')[5] ?? ''
+        const port = cand.split(' ')[6] ?? ''
+        const raddr = cand.match(/raddr\s+([\w.:-]+)/)?.[1] ?? ''
+        candDetail = ` ${typ} ${addr}:${port}${typ === 'relay' && raddr ? ` (中转服务器 ${raddr})` : ''}`
+      }
+      console.log('[rtc:signal] from user=' + u.id + ' room=' + roomId + ' type=' + sigType + (sigDetail ? ' ' + sigDetail : '') + candDetail + ' 转发成员数=' + (targetSize - 1))
       socket.to(rtcRoom(roomId)).emit('rtc:signal', { room: roomId, from: peerOf(socket), signal: d.signal })
       ack(ok())
     })
