@@ -41,7 +41,6 @@
     $('rv-screen').onclick = () => RV && RV.screen()
     $('rv-mic').onclick = () => RV && RV.mic()
     $('rv-stop').onclick = () => RV && RV.stop()
-    $('rv-pip').onclick = () => RV && RV.pip()
     $('rv-cam').addEventListener('contextmenu', (e) => { e.preventDefault(); RV && RV.cam() })
     $('rv-mic').addEventListener('contextmenu', (e) => { e.preventDefault(); RV && RV.mic() })
     document.addEventListener('click', (e) => { if (!e.target.closest('#rv-menu')) RV && RV.hideMenu() })

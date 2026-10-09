@@ -207,7 +207,6 @@
     $('rv-screen').onclick = () => { if (A.remoteView) A.remoteView.screen() }
     $('rv-mic').onclick = () => { if (A.remoteView) A.remoteView.mic() }
     $('rv-stop').onclick = () => { if (A.remoteView) A.remoteView.stop() }
-    $('rv-pip').onclick = () => { if (A.remoteView) A.remoteView.pip() }
     $('rv-win').onclick = () => {
       const d = S.currentDevice
       if (!d) return
