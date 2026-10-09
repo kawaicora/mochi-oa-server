@@ -50,6 +50,10 @@
   }
 
   // ── 远程系统信息（客户端 dev:sys 上报）──
+  function fmtMem(mem) { return (mem || []).map((m) => (m.capacity || '') + ' · ' + (m.speed || '') + ' · ' + (m.manufacturer || '') + ' · ' + (m.type || '')).join('\n') || '—' }
+  function fmtGpuInfo(gpus) { return (gpus || []).map((g) => (g.name || '') + (g.vram ? ' 显存:' + g.vram : '') + (g.driver ? ' 驱动:' + g.driver : '')).join('\n') || '—' }
+  function fmtDevices(devs) { return (devs || []).map((d) => '[' + (d.type || '设备') + '] ' + (d.name || '') + (d.mac ? ' MAC:' + d.mac : '') + (d.size ? ' 容量:' + d.size : '')).join('\n') || '—' }
+  function fmtProcs(procs) { return (procs || []).map((p) => (p.name || '') + '  PID:' + (p.pid || '') + '  内存:' + (p.mem != null ? p.mem + 'MB' : '—') + '  CPU:' + (p.cpu != null ? p.cpu + 's' : '—')).join('\n') || '—' }
   RV._renderSys = function (info) {
     if (!info) return
     const $ = (id) => document.getElementById(id)
@@ -60,9 +64,13 @@
     $('s-cpu').textContent = (info.cpuModel || '—') + ' · ' + (info.cpuCores || 0) + ' 核'
     $('s-mem').textContent = gb(info.totalMem)
     $('s-board').textContent = info.board || '—'
-    $('s-gpu').textContent = info.gpu || '—'
+    $('s-gpu').textContent = (info.gpuInfo || []).map((g) => g.name || '').filter(Boolean).join(' / ') || info.gpu || '—'
     $('s-uptime').textContent = uptime(info.uptime)
     $('s-disk').textContent = info.disk || '—'
+    $('s-memdetail').textContent = fmtMem(info.memDetail)
+    $('s-gpuinfo').textContent = fmtGpuInfo(info.gpuInfo)
+    $('s-devices').textContent = fmtDevices(info.devices)
+    $('s-procs').textContent = fmtProcs(info.processes)
   }
   RV._renderPerf = function (perf) {
     if (!perf) return
@@ -73,6 +81,7 @@
     $('perf-mem-v').textContent = (perf.memPercent != null ? perf.memPercent + '%' : '—') + (perf.memUsed != null && perf.memTotal != null ? '（' + mb(perf.memUsed) + ' / ' + gb(perf.memTotal) + '）' : '')
     drawLine($('perf-cpu'), RV.cpuHist, '#4a6cf7', 100)
     drawLine($('perf-mem'), RV.memHist, '#00c88a', 100)
+    if (perf.gpus) $('s-gpuload').textContent = perf.gpus.map((g) => (g.name || 'GPU') + ' : ' + (g.load != null ? g.load + '%' : '—')).join('\n') || '—'
   }
 
   function bind() {
