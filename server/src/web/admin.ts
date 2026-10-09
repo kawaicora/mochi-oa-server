@@ -138,7 +138,7 @@ export function registerAdminRoutes(http: HttpServer, _store: unknown, _io: Serv
       const mime = MIME[extname(abs).toLowerCase()] || 'application/octet-stream'
       try {
         const buf = readFileSync(abs)
-        res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' })
+        res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' })
         res.end(buf)
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
