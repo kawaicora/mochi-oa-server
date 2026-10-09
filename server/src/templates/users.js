@@ -1,37 +1,3 @@
-/**
- * 网页端「用户管理」页（/view/admin → 用户管理）：
- *   - 用户表格：id/用户名/昵称/头像/手机/邮箱/所属公司
- *   - 编辑用户：昵称/头像/手机/邮箱（admin:updateUser，邮箱查重）
- * 数据层：服务端 admin-users.ts handler（仅 SERVER_ADMIN）
- */
-
-export function buildUsersHtml(): string {
-  return `
-  <div id="users-wrap">
-    <div class="page-head"><span class="ph-title">用户管理</span><button class="mini-btn" id="users-refresh">刷新</button></div>
-    <div class="user-table" id="user-table"><div class="empty">加载中…</div></div>
-  </div>
-
-  <!-- 编辑用户弹窗 -->
-  <div id="user-edit" class="modal" style="display:none">
-    <div class="modal-inner ue-inner">
-      <div class="modal-title">编辑用户 <span id="ue-id" class="ue-id"></span></div>
-      <div class="modal-sub" id="ue-name">—</div>
-      <label>昵称</label><input id="ue-nick" type="text">
-      <label>手机</label><input id="ue-phone" type="text">
-      <label>邮箱</label><input id="ue-email" type="text">
-      <label>头像 URL</label><input id="ue-avatar" type="text">
-      <div class="modal-btns">
-        <button class="btn ghost" id="ue-cancel">取消</button>
-        <button class="btn" id="ue-save">保存</button>
-      </div>
-    </div>
-  </div>
-  `
-}
-
-export function buildUsersJs(): string {
-  return `
 ;(function () {
   const A = window.__admin
   if (!A) return
@@ -45,16 +11,21 @@ export function buildUsersJs(): string {
     const ack = await A.emit('admin:listUsers', {}).catch(() => ({ ok: false }))
     if (!ack.ok) { $('user-table').innerHTML = '<div class="empty">' + A.esc(ack.error || '获取用户失败') + '</div>'; return }
     U.list = ack.users || []
+    $('users-count').textContent = U.list.length
     U.render()
   }
 
   U.render = function () {
     const box = $('user-table')
     if (!U.list.length) { box.innerHTML = '<div class="empty">暂无用户</div>'; return }
-    const head = '<div class="ut-head"><span>ID</span><span>用户名</span><span>昵称</span><span>头像</span><span>手机</span><span>邮箱</span><span>所属公司</span><span>操作</span></div>'
+    const head = '<div class="ut-head"><span>ID</span><span>用户名</span><span>昵称</span><span>头像</span><span>手机</span><span>邮箱</span><span>服务器管理员</span><span>所属公司</span><span>操作</span></div>'
     const rows = U.list.map((u) => {
       const cs = (u.companies || []).map((c) => c.name + '(' + c.role + ')').join('，') || '—'
-      const av = u.avatar ? '<img src="' + A.esc(u.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display=\\'none\\'">' : ''
+      const av = u.avatar ? '<img src="' + A.esc(u.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : ''
+      const saLabel = u.serverAdmin ? '管理员' : '普通'
+      const saBtn = u.serverAdmin
+        ? '<button class="mini-btn" data-sa="' + u.username + '" data-sa-on="0">取消管理员</button>'
+        : '<button class="mini-btn primary" data-sa="' + u.username + '" data-sa-on="1">设为管理员</button>'
       return (
         '<div class="ut-row">' +
         '<span>' + u.id + '</span>' +
@@ -63,13 +34,22 @@ export function buildUsersJs(): string {
         '<span>' + av + '</span>' +
         '<span>' + A.esc(u.phone || '') + '</span>' +
         '<span>' + A.esc(u.email || '') + '</span>' +
+        '<span class="sa-badge ' + (u.serverAdmin ? 'sa-on' : '') + '">' + saLabel + '</span>' +
         '<span>' + A.esc(cs) + '</span>' +
-        '<span><button class="mini-btn" data-edit="' + u.id + '">编辑</button></span>' +
+        '<span style="display:flex;gap:6px"><button class="mini-btn" data-edit="' + u.id + '">编辑</button>' + saBtn + '</span>' +
         '</div>'
       )
     })
     box.innerHTML = head + rows.join('')
     box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => U.openEdit(Number(b.getAttribute('data-edit'))) })
+    box.querySelectorAll('[data-sa]').forEach((b) => { b.onclick = () => U.setServerAdmin(b.getAttribute('data-sa'), b.getAttribute('data-sa-on') === '1') })
+  }
+
+  U.setServerAdmin = async function (username, on) {
+    const ack = await A.emit('admin:setServerAdmin', { username, admin: on }).catch(() => ({ ok: false }))
+    if (!ack.ok) { A.toast(ack.error || '操作失败'); return }
+    A.toast('已' + (on ? '设为' : '取消') + '服务器管理员：' + username)
+    U.load()
   }
 
   U.openEdit = function (id) {
@@ -110,5 +90,3 @@ export function buildUsersJs(): string {
     $('ue-save').onclick = U.save
   }
 })()
-`
-}

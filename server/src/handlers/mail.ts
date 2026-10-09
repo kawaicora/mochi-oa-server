@@ -19,8 +19,12 @@ function authed(socket: Socket): AuthUser | null {
  * SERVER_ADMIN 判定：服务器所有者权限，基于用户名（大小写不敏感），与公司/群角色无关。
  * 名单来自 .env/Docker 的 SERVER_ADMIN_USERS（回退 ADMIN_USER）。
  */
+/** 运行时 SERVER_ADMIN 覆盖：可在 /view/admin 用户管理中动态设置（重启后回退到 config.serverAdmins） */
+export const serverAdminOverrides = new Set<string>()
+
 function isServerAdmin(auth: AuthUser, config: ServerConfig): boolean {
-  return config.serverAdmins.some((u) => u.toLowerCase() === auth.username.toLowerCase())
+  const n = auth.username.toLowerCase()
+  return config.serverAdmins.some((u) => u.toLowerCase() === n) || serverAdminOverrides.has(n)
 }
 
 /** 对外展示的配置视图（隐藏 SMTP 密码明文） */

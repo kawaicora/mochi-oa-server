@@ -9,7 +9,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node tools/compile-bytenode.mjs",
+    "build": "tsc -p tsconfig.json && node tools/copy-templates.mjs && node tools/compile-bytenode.mjs",
     "obf": "node tools/compile-bytenode.mjs",
     "start": "node dist/index.js",
     "dev": "tsc -p tsconfig.json && node dist/index.js",

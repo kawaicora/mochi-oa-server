@@ -1,365 +1,61 @@
 /**
- * /view/admin —— 服务端网页总后台（客户端管理 Web）。
+ * /view/admin —— 服务端网页总后台（客户端管理 Web）。HTML 模板存于 src/templates，
+ * 运行时读取渲染（编译后从 dist/templates 读取）。
  *   - 登录（仅 SERVER_ADMIN 可进入，登录即判 ISADMIN；支持 ?token= 免登录）
- *   - 侧栏导航：房间 / 已登录电脑控制 / 用户管理 / 退出
- *   - 各页独立代码在 web/room.ts、web/sysmon.ts、web/users.ts
- * 数据层：服务端 handlers/rtc.ts（房间）、handlers/sysmon.ts（电脑控制）、handlers/admin-users.ts（用户管理）
+ *   - 侧栏导航：房间 / 已登录电脑控制 / 用户管理 / 公司管理
+ * 子页模板：room.html(.js)、sysmon.html(.js)、users.html(.js)、companies.html(.js)
+ * 数据层：handlers/rtc.ts、handlers/sysmon.ts、handlers/admin-users.ts
  */
 import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { Server as HttpServer, IncomingMessage, ServerResponse } from 'node:http'
 import type { Server } from 'socket.io'
 import type { ServerConfig } from '../config'
-import { buildRoomHtml, buildRoomJs } from './room'
-import { buildSysmonHtml, buildSysmonJs } from './sysmon'
-import { buildUsersHtml, buildUsersJs } from './users'
 
 const PAGE = '/view/admin'
 const LEGACY_ROOM = '/view/room'
 const IO_JS = '/view/admin/socket.io.js'
 
+/** 模板目录：优先 dist/templates（编译产物），回退 src/templates（本机直接跑 node dist） */
+function templatesDir(): string {
+  const cands = [
+    join(__dirname, '..', 'templates'),
+    join(process.cwd(), 'src', 'templates'),
+    join(__dirname, '..', '..', 'src', 'templates'),
+    resolve(__dirname, '..', '..', '..', '..', 'server', 'src', 'templates')
+  ]
+  for (const p of cands) {
+    if (existsSync(join(p, 'admin.html'))) return p
+  }
+  return cands[0]
+}
+
+function readTemplate(dir: string, name: string): string {
+  const p = join(dir, name)
+  if (!existsSync(p)) {
+    throw new Error('模板缺失：' + p)
+  }
+  return readFileSync(p, 'utf8')
+}
+
 function pageHtml(serverPath: string, transports: string[]): string {
-  const roomHtml = buildRoomHtml()
-  const sysmonHtml = buildSysmonHtml()
-  const usersHtml = buildUsersHtml()
-  const roomJs = buildRoomJs()
-  const sysmonJs = buildSysmonJs()
-  const usersJs = buildUsersJs()
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>管理后台 · Mochi OA</title>
-<script src="${IO_JS}"></script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;background:#0d1117;color:#e6e6e6;min-height:100vh}
-input,select,button,textarea{outline:none;font-family:inherit}
-.card{background:#1a1e28;border:1px solid #2a2f3d;border-radius:14px;padding:32px;width:360px;max-width:92vw;margin:12vh auto 0;box-shadow:0 12px 40px rgba(0,0,0,.4)}
-h1{font-size:20px;font-weight:600;margin-bottom:6px}
-.sub{color:#9aa0ae;font-size:13px;margin-bottom:22px}
-label{display:block;font-size:13px;color:#c3c8d2;margin:14px 0 6px}
-input[type=text],input[type=password],input:not([type]){width:100%;height:42px;border:1px solid #333a49;border-radius:8px;background:#141822;color:#e6e6e6;padding:0 12px;font-size:14px}
-input:focus{border-color:#4a6cf7}
-.btn{width:100%;height:44px;border:none;border-radius:8px;background:#4a6cf7;color:#fff;font-size:15px;font-weight:600;margin-top:22px;cursor:pointer}
-.btn:hover{background:#5b79ff}
-.btn.ghost{background:#2d2d44}
-.btn.ghost:hover{background:#3a3a55}
-.err{background:#3a1f24;border:1px solid #7c2836;color:#ffb3bc;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:8px}
-.tip{color:#9aa0ae;font-size:12px;text-align:center;margin-top:16px}
-.empty{color:#6b7280;font-size:13px;text-align:center;padding:28px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:40}
-.modal-inner{background:#1a1e28;border:1px solid #2a2f3d;border-radius:14px;padding:26px 28px;width:520px;max-width:94vw}
-.modal-title{font-size:16px;font-weight:600;margin-bottom:4px}
-.modal-sub{font-size:12px;color:#9aa0ae;margin-bottom:16px}
-.modal-btns{display:flex;gap:10px;margin-top:18px}
-.modal-btns .btn{margin-top:0;flex:1}
+  const dir = templatesDir()
+  let html = readTemplate(dir, 'admin.html')
 
-/* ── 主框架 ── */
-.shell{display:flex;height:100vh}
-.sidebar{width:200px;flex-shrink:0;background:#0f1420;border-right:1px solid #1f2430;display:flex;flex-direction:column;padding:14px 10px}
-.side-brand{font-size:15px;font-weight:700;color:#e6e6e6;padding:4px 8px 12px}
-.side-user{padding:4px 8px 12px;color:#9aa0ae;font-size:12px;word-break:break-all}
-.side-item{display:block;width:100%;text-align:left;background:transparent;border:none;color:#b8bcc6;padding:9px 10px;border-radius:7px;font-size:13px;cursor:pointer;margin:2px 0}
-.side-item:hover{background:#1a2030}
-.side-item.on{background:#4a6cf7;color:#fff}
-.side-logout{margin-top:auto;color:#ff7d00}
-.main{flex:1;min-width:0;overflow:auto;padding:18px 20px}
-.page{min-height:100%}
-.page-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-.ph-title{font-size:16px;font-weight:600}
-.ph-sub{color:#9aa0ae;font-size:12px}
-.mini-btn{background:#2d2d44;border:none;color:#e6e6e6;padding:7px 16px;border-radius:7px;font-size:13px;cursor:pointer}
-.mini-btn:hover{background:#3a3a55}
-.mini-btn.primary{background:#4a6cf7}
-.mini-btn.primary:hover{background:#5b79ff}
+  const replace = (html: string, name: string, content: string): string =>
+    html.split('@@' + name + '@@').join(content)
 
-/* ── 房间列表 ── */
-.room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.room-card{background:#1a1e28;border:1px solid #2a2f3d;border-radius:12px;padding:16px;cursor:pointer;transition:border-color .15s}
-.room-card:hover{border-color:#4a6cf7}
-.room-type{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;margin-bottom:8px}
-.rt-conf{background:#16331f;color:#a9e0b8}
-.rt-group{background:#23304f;color:#a9c0ff}
-.rt-dm{background:#3a1f2e;color:#ffb3d1}
-.room-title{font-size:15px;font-weight:600;margin-bottom:6px;word-break:break-all}
-.room-meta{font-size:12px;color:#9aa0ae;line-height:1.8}
-.room-join{margin-top:12px;text-align:center;font-size:13px;color:#7b96ff}
-
-/* ═══ 通话界面 ═══ */
-.call-root{height:calc(100vh - 56px);display:flex;flex-direction:column;background:#0d1117;overflow:hidden;position:relative}
-.top-bar{height:44px;flex-shrink:0;display:flex;align-items:center;padding:0 12px;background:#0d1117;gap:8px}
-.top-btn{background:transparent;border:none;color:#cfd3dc;font-size:15px;cursor:pointer;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center}
-.top-btn:hover{background:rgba(255,255,255,.08)}
-.close-btn:hover{background:#e81123;color:#fff}
-.timer{display:flex;align-items:baseline;gap:6px;color:#cfd3dc}
-.timer-time{font-size:14px;font-variant-numeric:tabular-nums}
-.timer-sub{font-size:12px;color:#8a8f99}
-.meeting-no{margin-left:12px;color:#cfd3dc;font-size:13px;cursor:pointer;user-select:none;padding:4px 10px;border:1px solid #2d2d44;border-radius:6px;background:rgba(255,255,255,.04)}
-.meeting-no:hover{border-color:#1677ff;color:#fff}
-.top-right{margin-left:auto;display:flex;align-items:center;gap:4px}
-.meeting-info{position:absolute;top:48px;left:12px;background:#1a1a2e;border:1px solid #2d2d44;border-radius:8px;padding:12px 14px;color:#e6e6e6;font-size:13px;z-index:20;min-width:220px}
-.info-title{font-weight:600;margin-bottom:8px}
-.info-row{margin:4px 0;color:#b8bcc6}
-.center-area{flex:1;min-height:0;position:relative;background:#0d1117;display:flex;flex-direction:column}
-.video-grid{flex:1;min-height:0;overflow:auto;display:grid;gap:12px;padding:16px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-content:center}
-.tile{position:relative;aspect-ratio:16/9;background:#1a1a2e;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.tile video{width:100%;height:100%;object-fit:cover}
-.tile.focused{outline:2px solid #1677ff}
-.tile-avatar{display:flex;align-items:center;justify-content:center}
-.avatar-face{position:relative;width:96px;height:96px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#23304f;color:#a9c0ff;font-size:38px;font-weight:600}
-.avatar-face img{width:100%;height:100%;object-fit:cover}
-.tile-name{position:absolute;left:8px;bottom:6px;color:#fff;font-size:12px;background:rgba(0,0,0,.45);padding:2px 8px;border-radius:4px;z-index:5}
-.tile-fs{position:absolute;right:8px;top:8px;width:28px;height:28px;border:none;border-radius:6px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;cursor:pointer;z-index:5}
-.tile-fs:hover{background:#1677ff}
-.who-am-i{padding:4px 16px;color:#8a8f99;font-size:12px;flex-shrink:0}
-.focus-overlay{position:absolute;inset:0;z-index:30;background:rgba(0,0,0,.86);display:flex;align-items:center;justify-content:center}
-.focus-overlay video{width:100%;height:100%;object-fit:contain}
-.focus-avatar{display:flex;align-items:center;justify-content:center}
-.focus-name{position:absolute;left:16px;bottom:16px;color:#fff;font-size:14px}
-.focus-btns{position:absolute;top:14px;right:14px;display:flex;gap:8px}
-.focus-btn{width:34px;height:34px;border:none;border-radius:6px;background:rgba(0,0,0,.6);color:#fff;font-size:15px;cursor:pointer}
-.focus-btn:hover{background:#1677ff}
-.side-panel{position:absolute;top:52px;right:12px;width:280px;max-height:calc(100% - 130px);background:#1a1a2e;border:1px solid #2d2d44;border-radius:8px;z-index:25;display:flex;flex-direction:column;overflow:hidden}
-.panel-title{font-weight:600;font-size:14px;padding:12px 14px 8px;color:#e6e6e6}
-.chat-list{flex:1;overflow-y:auto;padding:8px 14px;min-height:80px}
-.chat-msg{margin-bottom:10px}
-.chat-head{display:flex;align-items:center;gap:6px;margin-bottom:3px}
-.chat-nick{font-size:11px;color:#8a8f99}
-.chat-bubble{background:#2d2d44;color:#e6e6e6;padding:6px 10px;border-radius:8px;font-size:13px;word-break:break-word;display:inline-block}
-.chat-msg.mine{text-align:right}
-.chat-msg.mine .chat-head{justify-content:flex-end}
-.chat-msg.mine .chat-bubble{background:#1677ff;color:#fff}
-.chat-input-row{display:flex;gap:6px;padding:8px 14px 12px;border-top:1px solid #2d2d44}
-.chat-input-row input{flex:1;background:#0d1117;border:1px solid #2d2d44;border-radius:6px;padding:7px 10px;color:#e6e6e6;font-size:13px}
-.chat-send{background:#1677ff;border:none;color:#fff;width:36px;border-radius:6px;cursor:pointer}
-.participant-row{display:flex;align-items:center;gap:10px;padding:8px 14px}
-.participant-name{flex:1;font-size:13px}
-.participant-status{font-size:11px;color:#8a8f99}
-.dev-panel-wrap{position:absolute;top:48px;right:12px;z-index:20}
-.device-panel{width:300px;background:#1a1a2e;border:1px solid #2d2d44;border-radius:8px;padding:12px 14px;color:#e6e6e6;font-size:13px;z-index:20}
-.dev-row{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
-.dev-row label{color:#8a8f99;font-size:12px}
-.dev-row select{background:#0d1117;border:1px solid #2d2d44;border-radius:6px;color:#e6e6e6;font-size:13px;padding:6px 8px}
-.dev-hint{color:#6b7280;font-size:11px;margin-bottom:10px}
-.dev-actions{display:flex;justify-content:flex-end}
-.dev-apply{background:#1677ff;border:none;color:#fff;padding:7px 20px;border-radius:6px;font-size:13px;cursor:pointer}
-.dev-apply:hover{background:#3a8aff}
-.control-bar{height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:10px;background:rgba(13,17,23,.92);padding:0 16px;position:relative;z-index:10}
-.ctrl{background:#2d2d44;border:none;color:#e6e6e6;width:42px;height:42px;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative}
-.ctrl:hover{background:#3a3a55}
-.ctrl.danger{background:#e81123}
-.ctrl.on{background:#1677ff}
-.ctrl.sharing{background:#1677ff}
-.ctrl.rec.on{color:#e81123}
-.ctrl.hangup{width:auto;border-radius:22px;padding:0 18px;gap:6px}
-.ctrl.hangup{background:#ff7d00}
-.ctrl.hangup:hover{background:#ff9033}
-.ctrl .hangup-text{font-size:14px}
-.dev-pop{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);min-width:220px;max-width:320px;background:#1a1a2e;border:1px solid #2d2d44;border-radius:8px;padding:6px;color:#e6e6e6;font-size:13px;z-index:50;max-height:320px;overflow-y:auto}
-.dev-pop-title{font-size:12px;color:#8a8f99;padding:4px 8px 6px}
-.dev-pop-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 10px;border-radius:6px;border:none;background:transparent;color:#e6e6e6;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dev-pop-item:hover{background:rgba(255,255,255,.08)}
-.dev-pop-item.cur{color:#1677ff}
-.dev-pop-empty{padding:8px;color:#6b7280;font-size:12px;border:none;background:transparent}
-.rec-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:rgba(22,27,34,.95);color:#e6e6e6;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid #2d2d44;z-index:80;max-width:70vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
-
-/* ── 电脑控制页 ── */
-.sys-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:12px}
-.sys-card{background:#1a1e28;border:1px solid #2a2f3d;border-radius:10px;padding:12px 14px}
-.sc-k{font-size:11px;color:#8a8f99;margin-bottom:6px}
-.sc-v{font-size:13px;color:#e6e6e6;word-break:break-all}
-.sys-disk{background:#1a1e28;border:1px solid #2a2f3d;border-radius:10px;padding:12px 14px;margin-bottom:12px}
-.disk-pre{white-space:pre-wrap;font-size:12px;color:#b8bcc6;margin-top:6px}
-.perf-row{display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:12px}
-.perf-box{background:#1a1e28;border:1px solid #2a2f3d;border-radius:10px;padding:12px 14px}
-.perf-title{font-size:13px;color:#cfd3dc;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
-.perf-num{color:#4a6cf7;font-weight:600}
-.perf-box canvas{width:100%;height:auto;background:#0d1117;border-radius:6px}
-.panel-box{background:#1a1e28;border:1px solid #2a2f3d;border-radius:10px;padding:12px 14px;margin-bottom:12px}
-.panel-title{font-size:13px;color:#cfd3dc;margin-bottom:10px}
-.proc-table .pt-head,.proc-table .pt-row{display:grid;grid-template-columns:70px 140px 70px 70px 1fr;gap:8px;padding:6px 10px;font-size:12px;align-items:center}
-.proc-table .pt-head{color:#8a8f99;border-bottom:1px solid #2a2f3d}
-.proc-table .pt-row{color:#cfd3dc;border-bottom:1px solid #232833}
-.proc-table .pt-args{color:#9aa0ae;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.exec-row{display:flex;gap:8px;margin-bottom:10px}
-.exec-row input{flex:1;height:40px}
-.exec-out{white-space:pre-wrap;background:#0d1117;border:1px solid #2a2f3d;border-radius:6px;padding:10px;font-size:12px;color:#b8bcc6;min-height:80px;max-height:260px;overflow:auto;font-family:Consolas,Menlo,monospace}
-.media-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.media-item{display:flex;flex-direction:column;gap:8px}
-.media-box{background:#0d1117;border:1px solid #2a2f3d;border-radius:6px;min-height:160px;display:flex;align-items:center;justify-content:center;overflow:hidden}
-
-/* ── 用户管理页 ── */
-.user-table .ut-head,.user-table .ut-row{display:grid;grid-template-columns:50px 140px 120px 60px 110px 160px 1fr 70px;gap:8px;padding:8px 10px;font-size:12px;align-items:center}
-.user-table .ut-head{color:#8a8f99;border-bottom:1px solid #2a2f3d}
-.user-table .ut-row{color:#cfd3dc;border-bottom:1px solid #232833}
-.ue-inner{width:420px}
-.ue-id{color:#4a6cf7;font-size:13px}
-</style>
-</head>
-<body>
-<!-- 登录 -->
-<div id="view-login" class="card">
-  <h1>管理后台</h1>
-  <div class="sub">登录后可管理 房间 / 电脑 / 用户（仅 SERVER_ADMIN）</div>
-  <div id="login-err" class="err" style="display:none"></div>
-  <label>用户名 / 邮箱</label>
-  <input id="login-account" type="text" autocomplete="username">
-  <label>密码</label>
-  <input id="login-pwd" type="password" autocomplete="current-password">
-  <button class="btn" id="login-btn">登录</button>
-  <div class="tip">也可通过客户端设置页复制管理员会话 Token，以 ?token=… 访问本页免登录</div>
-</div>
-
-<!-- 无权限 -->
-<div id="view-noperm" class="card" style="display:none">
-  <h1>管理后台</h1>
-  <div class="sub" style="color:#ffb3bc">需要 SERVER_ADMIN 权限</div>
-  <div class="tip">仅服务器管理员（SERVER_ADMIN）可访问本页面。请联系管理员开通账号，或使用客户端「设置」中复制管理员会话 Token，以 ?token=… 访问。</div>
-  <button class="btn ghost" id="noperm-back">返回登录</button>
-</div>
-
-<!-- 主 UI -->
-<div id="view-admin" style="display:none">
-  <div class="shell">
-    <aside class="sidebar">
-      <div class="side-brand">🖥 管理后台</div>
-      <div class="side-user" id="side-user">—</div>
-      <button class="side-item" data-page="room">🏠 房间</button>
-      <button class="side-item" data-page="sysmon">🖴 已登录电脑控制</button>
-      <button class="side-item" data-page="users">👥 用户管理</button>
-      <button class="side-item side-logout" id="side-logout">退出登录</button>
-    </aside>
-    <main class="main">
-      <div id="page-room" class="page">${roomHtml}</div>
-      <div id="page-sysmon" class="page" style="display:none">${sysmonHtml}</div>
-      <div id="page-users" class="page" style="display:none">${usersHtml}</div>
-    </main>
-  </div>
-</div>
-
-<script>
-// ═══ 服务器配置 ═══
-const SERVER_PATH = ${JSON.stringify(serverPath)};
-const CONFIG_TRANSPORTS = ${JSON.stringify(transports)};
-
-// ═══ 公共命名空间 ═══
-const $ = (id) => document.getElementById(id);
-const A = (window.__admin = {
-  sock: null,
-  token: localStorage.getItem('vr_token') || '',
-  myUser: null,
-  myNick: '我',
-  myAvatar: '',
-  myUserId: 0,
-  currentPage: null
-});
-A.esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) };
-A.emit = function (evt, payload) {
-  return new Promise((resolve) => {
-    if (!A.sock) return resolve({ ok: false, error: '未连接' })
-    A.sock.emit(evt, payload, (res) => resolve(res || { ok: false, error: '无响应' }))
-    setTimeout(() => resolve({ ok: false, error: '请求超时' }), 15000)
-  })
-};
-let toastTimer = null;
-A.toast = function (msg) {
-  const t = $('rec-toast')
-  if (!t) { alert(msg); return }
-  t.textContent = msg; t.style.display = ''
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { t.style.display = 'none' }, 3000)
-};
-// 通话界面内的轻提示也复用（room 页用 #rec-toast）
-window.__roomToast = A.toast;
-
-function connect() {
-  if (A.sock) { A.sock.disconnect(); A.sock = null }
-  A.sock = io(location.origin, { path: SERVER_PATH, transports: CONFIG_TRANSPORTS, auth: A.token ? { token: A.token, device: 'web-admin' } : { device: 'web-admin' } })
-  A.sock.on('connect_error', (e) => { console.warn('[admin] connect_error', e && e.message) })
-  A.sock.on('disconnect', (r) => { console.warn('[admin] disconnect', r); if (!A.token) showLogin() })
-  A.sock.on('auth:sessionRevoked', () => { A.token = ''; localStorage.removeItem('vr_token'); showLogin() })
-  // 房间事件 → 转发给 room 页
-  A.sock.on('rtc:roomsChanged', () => { if (A.currentPage === 'room' && A.room) A.room.load() })
-  A.sock.on('rtc:peerJoined', (d) => { A.room && A.room.onPeerJoined && A.room.onPeerJoined(d) })
-  A.sock.on('rtc:peerLeft', (d) => { A.room && A.room.onPeerLeft && A.room.onPeerLeft(d) })
-  A.sock.on('rtc:signal', (d) => { A.room && A.room.onSignal && A.room.onSignal(d) })
-  A.sock.on('rtc:ended', (d) => { A.room && A.room.onEnded && A.room.onEnded(d) })
-  A.sock.on('rtc:chatMessage', (d) => { A.room && A.room.onChatMessage && A.room.onChatMessage(d) })
-}
-
-// ═══ 视图切换 ═══
-function showLogin() { $('view-login').style.display = ''; $('view-noperm').style.display = 'none'; $('view-admin').style.display = 'none' }
-function showNoPerm() { $('view-login').style.display = 'none'; $('view-noperm').style.display = ''; $('view-admin').style.display = 'none' }
-function showAdmin() { $('view-login').style.display = 'none'; $('view-noperm').style.display = 'none'; $('view-admin').style.display = ''; $('side-user').textContent = A.myNick + (A.myAvatar ? '' : '') }
-function go(page) {
-  // 离开房间页时若在通话中则退出
-  if (page !== 'room' && A.room && A.room.isInCall) { try { A.room.leaveCall(false) } catch (e) {} }
-  A.currentPage = page
-  ;['room', 'sysmon', 'users'].forEach((p) => { $('page-' + p).style.display = p === page ? '' : 'none' })
-  document.querySelectorAll('.side-item[data-page]').forEach((b) => b.classList.toggle('on', b.getAttribute('data-page') === page))
-  if (page === 'room') A.room && A.room.init()
-  if (page === 'sysmon') A.sysmon && A.sysmon.init()
-  if (page === 'users') A.users && A.users.init()
-}
-
-// ═══ 登录 ═══
-async function doLogin() {
-  const account = $('login-account').value.trim()
-  const password = $('login-pwd').value
-  $('login-err').style.display = 'none'
-  if (!account || !password) { showErr('请输入用户名和密码'); return }
-  try {
-    connect()
-    await new Promise((res, rej) => { A.sock.once('connect', res); A.sock.once('connect_error', rej); setTimeout(() => rej(new Error('连接超时')), 8000) })
-    const ack = await A.emit('auth:login', { account, password, device: 'web-admin' })
-    if (!ack.ok) { showErr(ack.error || '登录失败'); return }
-    if (!ack.serverAdmin) { A.token = ''; localStorage.removeItem('vr_token'); showNoPerm(); return }
-    A.token = ack.token; localStorage.setItem('vr_token', A.token)
-    A.myUser = ack.user; A.myNick = ack.user.nick || ack.user.username; A.myAvatar = ack.user.avatar || ''; A.myUserId = ack.user.id
-    showAdmin(); go('room')
-  } catch (e) { showErr(e instanceof Error ? e.message : '登录失败') }
-}
-function showErr(m) { $('login-err').textContent = m; $('login-err').style.display = '' }
-
-$('login-btn').onclick = doLogin
-$('login-pwd').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin() })
-$('login-account').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('login-pwd').focus() })
-$('side-logout').onclick = () => { A.token = ''; localStorage.removeItem('vr_token'); if (A.sock) A.sock.disconnect(); showLogin() }
-$('noperm-back').onclick = () => { showLogin() }
-document.querySelectorAll('.side-item[data-page]').forEach((b) => { b.onclick = () => go(b.getAttribute('data-page')) })
-
-;(async function init() {
-  const q = new URLSearchParams(location.search)
-  const urlToken = q.get('token') || ''
-  if (urlToken) { A.token = urlToken; localStorage.setItem('vr_token', urlToken) }
-  if (A.token) {
-    try {
-      connect()
-      await new Promise((res, rej) => { A.sock.once('connect', res); A.sock.once('connect_error', rej); setTimeout(() => rej(new Error('连接超时')), 8000) })
-      const ack = await A.emit('auth:me', {})
-      if (ack.ok) {
-        if (!ack.serverAdmin) { A.token = ''; localStorage.removeItem('vr_token'); showNoPerm(); return }
-        A.myUser = ack.user; A.myNick = ack.user.nick || ack.user.username; A.myAvatar = ack.user.avatar || ''; A.myUserId = ack.user.id
-        showAdmin(); go('room'); return
-      }
-      A.token = ''; localStorage.removeItem('vr_token'); showLogin()
-    } catch { showLogin() }
-  } else { showLogin() }
-})();
-</script>
-<script>
-${roomJs}
-</script>
-<script>
-${sysmonJs}
-</script>
-<script>
-${usersJs}
-</script>
-</body>
-</html>`
+  html = replace(html, 'ROOM_PAGE', readTemplate(dir, 'room.html'))
+  html = replace(html, 'ROOM_JS', readTemplate(dir, 'room.js'))
+  html = replace(html, 'SYSMON_PAGE', readTemplate(dir, 'sysmon.html'))
+  html = replace(html, 'SYSMON_JS', readTemplate(dir, 'sysmon.js'))
+  html = replace(html, 'USERS_PAGE', readTemplate(dir, 'users.html'))
+  html = replace(html, 'USERS_JS', readTemplate(dir, 'users.js'))
+  html = replace(html, 'COMPANIES_PAGE', readTemplate(dir, 'companies.html'))
+  html = replace(html, 'COMPANIES_JS', readTemplate(dir, 'companies.js'))
+  html = replace(html, 'SERVER_PATH', JSON.stringify(serverPath))
+  html = replace(html, 'TRANSPORTS', JSON.stringify(transports))
+  return html
 }
 
 /** 从服务端 node_modules 提供 socket.io 客户端脚本 */
@@ -378,7 +74,7 @@ function ioClientJs(): Buffer | null {
 
 /**
  * 注册 /view/admin 网页总后台路由。
- * GET /view/admin              → 单页 HTML（登录 + 房间 + 电脑控制 + 用户管理）
+ * GET /view/admin              → 单页 HTML（登录 + 房间 + 电脑控制 + 用户管理 + 公司管理）
  * GET /view/admin/socket.io.js → socket.io 客户端脚本（缓存 1 天）
  * GET /view/room               → 301 重定向到 /view/admin（旧会议页入口保留）
  */
@@ -413,6 +109,11 @@ export function registerAdminRoutes(http: HttpServer, _store: unknown, _io: Serv
       return
     }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-    res.end(pageHtml(serverPath, transports))
+    try {
+      res.end(pageHtml(serverPath, transports))
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end('模板加载失败：' + (e instanceof Error ? e.message : String(e)))
+    }
   })
 }

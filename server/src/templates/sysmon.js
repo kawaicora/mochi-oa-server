@@ -1,88 +1,10 @@
-/**
- * 网页端「已登录电脑控制」页（/view/admin → 电脑控制）：
- *   - 系统信息：主机名/IP(路由器分配)/系统/CPU型号与核数/内存/磁盘/主板/显卡/运行时长
- *   - 实时性能：CPU 使用率 + 内存 + 进程数（canvas 曲线）
- *   - 进程列表（刷新）
- *   - 命令行执行
- *   - 屏幕截图 / 摄像头读取（无显示/设备环境会明确提示）
- * 数据层：服务端 sysmon.ts handler（仅 SERVER_ADMIN）
- */
-
-export function buildSysmonHtml(): string {
-  return `
-  <div id="sysmon-wrap">
-    <div class="page-head"><span class="ph-title">已登录电脑控制</span><button class="mini-btn" id="sys-refresh">刷新系统信息</button></div>
-
-    <!-- 系统信息 -->
-    <div class="sys-cards" id="sys-cards">
-      <div class="sys-card"><div class="sc-k">主机名</div><div class="sc-v" id="s-host">—</div></div>
-      <div class="sys-card"><div class="sc-k">IP 地址</div><div class="sc-v" id="s-ip">—</div></div>
-      <div class="sys-card"><div class="sc-k">操作系统</div><div class="sc-v" id="s-os">—</div></div>
-      <div class="sys-card"><div class="sc-k">CPU</div><div class="sc-v" id="s-cpu">—</div></div>
-      <div class="sys-card"><div class="sc-k">内存总量</div><div class="sc-v" id="s-mem">—</div></div>
-      <div class="sys-card"><div class="sc-k">主板</div><div class="sc-v" id="s-board">—</div></div>
-      <div class="sys-card"><div class="sc-k">显卡</div><div class="sc-v" id="s-gpu">—</div></div>
-      <div class="sys-card"><div class="sc-k">运行时长</div><div class="sc-v" id="s-uptime">—</div></div>
-    </div>
-    <div class="sys-disk"><div class="sc-k">磁盘</div><pre id="s-disk" class="disk-pre">—</pre></div>
-
-    <!-- 实时性能 -->
-    <div class="perf-row">
-      <div class="perf-box">
-        <div class="perf-title">CPU 使用率 <span id="perf-cpu-v" class="perf-num">0%</span></div>
-        <canvas id="perf-cpu" width="600" height="160"></canvas>
-      </div>
-      <div class="perf-box">
-        <div class="perf-title">内存 <span id="perf-mem-v" class="perf-num">0%</span></div>
-        <canvas id="perf-mem" width="600" height="160"></canvas>
-      </div>
-      <div class="perf-box">
-        <div class="perf-title">进程数 <span id="perf-proc-v" class="perf-num">0</span></div>
-        <button class="mini-btn" id="proc-refresh">刷新进程列表</button>
-      </div>
-    </div>
-
-    <!-- 进程列表 -->
-    <div class="panel-box">
-      <div class="panel-title">进程列表</div>
-      <div class="proc-table" id="proc-table"><div class="empty">点击「刷新进程列表」查看</div></div>
-    </div>
-
-    <!-- 命令行 -->
-    <div class="panel-box">
-      <div class="panel-title">执行命令行（仅 SERVER_ADMIN，15s 超时）</div>
-      <div class="exec-row">
-        <input id="exec-input" placeholder="例如：ls -la /  |  dir  |  df -h  |  free -m">
-        <button class="mini-btn primary" id="exec-run">执行</button>
-      </div>
-      <pre id="exec-out" class="exec-out"></pre>
-    </div>
-
-    <!-- 屏幕 / 摄像头 -->
-    <div class="panel-box">
-      <div class="panel-title">远程查看</div>
-      <div class="media-row">
-        <div class="media-item">
-          <button class="mini-btn primary" id="shot-btn">截取屏幕</button>
-          <div id="shot-box" class="media-box"><span class="empty">点击截取屏幕</span></div>
-        </div>
-        <div class="media-item">
-          <button class="mini-btn primary" id="cam-btn">读取摄像头</button>
-          <div id="cam-box" class="media-box"><span class="empty">点击读取摄像头（服务器本机设备）</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-  `
-}
-
-export function buildSysmonJs(): string {
-  return `
 ;(function () {
   const A = window.__admin
   if (!A) return
   const $ = (id) => document.getElementById(id)
   const S = (A.sysmon = A.sysmon || {})
+  S.devices = []
+  S.currentDevice = null
   S.cpuHist = []
   S.memHist = []
   S._poll = null
@@ -91,6 +13,62 @@ export function buildSysmonJs(): string {
   function mb(n) { return n == null ? '—' : (n / 1048576).toFixed(0) + ' MB' }
   function uptime(s) { if (!s) return '—'; const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600); const m = Math.floor((s % 3600) / 60); return d + '天 ' + h + '时 ' + m + '分' }
 
+  // ─── 设备九宫格 ───
+  S.loadDevices = async function () {
+    const ack = await A.emit('admin:listDevices', {}).catch(() => ({ ok: false }))
+    if (!ack.ok) { A.toast(ack.error || '获取设备列表失败'); return }
+    S.devices = ack.devices || []
+    S.renderDevices()
+  }
+  S.renderDevices = function () {
+    $('dev-count').textContent = S.devices.length
+    const grid = $('dev-grid')
+    grid.innerHTML = ''
+    if (!S.devices.length) { grid.innerHTML = '<div class="empty">暂无在线设备（客户端对接后显示所有在线用户电脑）</div>'; return }
+    S.devices.forEach((d) => {
+      const el = document.createElement('div')
+      el.className = 'dev-card'
+      const osIcon = /win/i.test(d.os || '') ? '🖥' : /linux/i.test(d.os || '') ? '🐧' : /mac/i.test(d.os || '') ? '💻' : '🖴'
+      el.innerHTML =
+        '<div class="dev-os">' + osIcon + '</div>' +
+        '<div class="dev-name">' + A.esc(d.name || '电脑') + '</div>' +
+        '<div class="dev-user">' + A.esc(d.username || '') + '</div>' +
+        '<div class="dev-meta">' + A.esc(d.os || '') + ' · ' + A.esc(d.ip || '') + '</div>' +
+        '<div class="dev-state ' + (d.online ? 'on' : 'off') + '">' + (d.online ? '在线' : '离线') + '</div>'
+      el.onclick = () => S.openDevice(d)
+      grid.appendChild(el)
+    })
+  }
+  S.openDevice = function (d) {
+    S.currentDevice = d
+    $('dev-grid-view').style.display = 'none'
+    $('dev-detail').style.display = ''
+    $('dd-name').textContent = d.name || '设备'
+    $('dd-meta').textContent = (d.username || '') + ' · ' + (d.os || '') + ' · ' + (d.ip || '')
+    if (d.remote) {
+      // 客户端对接的设备：功能占位
+      $('sys-cards').innerHTML = '<div class="empty" style="padding:40px">该设备为远程客户端电脑，控制功能待客户端对接后启用。</div>'
+      $('proc-table').innerHTML = '<div class="empty">待客户端对接</div>'
+      $('exec-out').textContent = '待客户端对接'
+      $('shot-box').innerHTML = '<span class="empty">待客户端对接</span>'
+      $('cam-box').innerHTML = '<span class="empty">待客户端对接</span>'
+      if (S._poll) clearInterval(S._poll)
+      return
+    }
+    S.loadInfo()
+    S.loadProcesses()
+    S.pollPerf()
+    if (S._poll) clearInterval(S._poll)
+    S._poll = setInterval(() => S.pollPerf(), 2500)
+  }
+  S.closeDetail = function () {
+    if (S._poll) { clearInterval(S._poll); S._poll = null }
+    $('dev-detail').style.display = 'none'
+    $('dev-grid-view').style.display = ''
+    S.loadDevices()
+  }
+
+  // ─── 系统信息 / 性能 / 进程 / 命令 / 屏幕 / 摄像头（对本机/服务器生效）───
   S.loadInfo = async function () {
     const ack = await A.emit('sys:info', {}).catch(() => ({ ok: false }))
     if (!ack.ok) { A.toast(ack.error || '获取系统信息失败'); return }
@@ -173,11 +151,9 @@ export function buildSysmonJs(): string {
   S.init = function () {
     if (S._inited) return
     S._inited = true
-    S.loadInfo()
-    S.loadProcesses()
-    S.pollPerf()
-    if (S._poll) clearInterval(S._poll)
-    S._poll = setInterval(() => S.pollPerf(), 2500)
+    S.loadDevices()
+    $('dev-refresh').onclick = S.loadDevices
+    $('dd-back').onclick = S.closeDetail
     $('sys-refresh').onclick = S.loadInfo
     $('proc-refresh').onclick = S.loadProcesses
     $('exec-run').onclick = S.exec
@@ -186,5 +162,3 @@ export function buildSysmonJs(): string {
     $('cam-btn').onclick = S.cam
   }
 })()
-`
-}
