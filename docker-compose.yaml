@@ -17,8 +17,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-    # ports:
-    #   - "3306:3306"
+    # 数据库直接映射到宿主 3306，便于本地开发/客户端直连（mysql:8.0 容器内 3306）
+    ports:
+      - "3306:3306"
 
   mochi-oa-server-2f8e9c:
     # 直接用官方 node:22-slim，不 build 自定义镜像；dist/node_modules/data 全部挂载
