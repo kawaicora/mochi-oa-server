@@ -117,10 +117,26 @@
     if (!ack.ok) { $('rv-state').textContent = '查看失败：' + (ack.error || ''); return }
     RV._ice = ack.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }]
     $('rv-state').textContent = ack.name + '（' + ack.ip + '）在线'
-    // 初始系统信息快照（dev:view 随 ack 返回的缓存）
+    // 初始系统信息快照（dev:view 随 ack 返回的缓存）；无缓存时先用 ack 基础信息填充，
+    // 避免残留服务器本机的旧值，等待 dev:sys 实时上报补齐
     RV.cpuHist = []
     RV.memHist = []
-    if (ack.sys) { RV._renderSys(ack.sys.info); RV._renderPerf(ack.sys.perf) }
+    if (ack.sys) {
+      RV._renderSys(ack.sys.info)
+      RV._renderPerf(ack.sys.perf)
+    } else {
+      RV._renderSys({
+        hostname: ack.name,
+        os: ack.os,
+        ips: ack.ip ? [{ name: '', address: ack.ip, internal: false }] : [],
+        cpuModel: undefined, cpuCores: 0, totalMem: undefined, board: '', gpu: '', uptime: undefined, disk: '等待客户端上报系统信息…'
+      })
+      RV._renderPerf(null)
+      const $e = (id) => document.getElementById(id)
+      $e('perf-cpu-v').textContent = '—'
+      $e('perf-mem-v').textContent = '—'
+      $e('s-disk').textContent = '等待客户端上报系统信息…'
+    }
     A.emit('dev:enumerate', { deviceId: RV.deviceId })
   }
 

@@ -112,9 +112,11 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       const d = (data ?? {}) as { deviceId?: unknown; info?: unknown; perf?: unknown }
       const deviceId = String(d.deviceId ?? '')
       const dev = remoteDevices.get(deviceId)
-      if (!dev || dev.socket !== socket) return
+      if (!dev || dev.socket !== socket) { console.log(`[dev] dev:sys 丢弃 deviceId=${deviceId}（设备不在线或 socket 不匹配）`); return }
+      const perf = (d.perf ?? {}) as { cpu?: unknown; memPercent?: unknown }
       dev.lastSeen = Date.now()
       dev.sys = { info: (d.info ?? {}) as Record<string, unknown>, perf: (d.perf ?? {}) as Record<string, unknown>, ts: Date.now() }
+      console.log(`[dev] 被控端系统上报 deviceId=${deviceId} cpu=${perf.cpu ?? '?'}% mem=${perf.memPercent ?? '?'}% 转发至=${dev.controller || '(无控制端)'}`)
       if (dev.controller) {
         const ctrl = io.sockets.sockets.get(dev.controller)
         if (ctrl) send(ctrl, 'dev:sys', { deviceId, info: d.info, perf: d.perf })
