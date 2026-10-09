@@ -171,6 +171,7 @@ export function registerAdminUsersHandlers(ctx: { io: Server; store: Store; conf
         })
       }
       ack(ok({ devices }))
+      console.log('[admin] listDevices 返回：' + devices.map((x) => `${x.id}(${x.name}|remote=${x.remote}|online=${x.online})`).join(' | '))
     })
   })
 }
