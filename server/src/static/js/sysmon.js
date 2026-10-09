@@ -40,6 +40,7 @@
     })
   }
   S.openDevice = function (d) {
+    console.log('[sysmon] openDevice d=', d, 'remote=', !!d.remote)
     S.currentDevice = d
     $('dev-grid-view').style.display = 'none'
     $('dev-detail').style.display = ''
