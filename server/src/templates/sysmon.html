@@ -27,7 +27,7 @@
     </div>
     <div class="sys-disk"><div class="sc-k">磁盘</div><pre id="s-disk" class="disk-pre">—</pre></div>
 
-    <!-- 远程客户端电脑：远程画面 + 控制栏（复用房间控制逻辑） -->
+    <!-- 远程客户端电脑：远程画面 + 房间风格控制栏（摄像头/屏幕/麦克风，设备为远程电脑的） -->
     <div class="panel-box" id="remote-panel" style="display:none">
       <div class="panel-title">远程画面 <span id="rv-state" class="perf-num"></span></div>
       <div class="rv-stage">
@@ -35,11 +35,10 @@
         <div class="rv-empty" id="rv-empty">选择下方设备开始远程查看</div>
       </div>
       <div class="rv-bar">
-        <button class="mini-btn primary" id="rv-cam">📷 摄像头</button>
-        <button class="mini-btn primary" id="rv-screen">🖥 屏幕</button>
-        <button class="mini-btn primary" id="rv-mic">🎤 麦克风</button>
-        <button class="mini-btn" id="rv-stop">停止</button>
-        <span class="rv-hint">右键「摄像头/麦克风」选择设备</span>
+        <button class="rv-ctrl" id="rv-mic" title="麦克风：点击选择设备并收听">&#127908;</button>
+        <button class="rv-ctrl" id="rv-cam" title="摄像头：点击选择设备并预览">&#128247;</button>
+        <button class="rv-ctrl" id="rv-screen" title="共享远程屏幕">&#128421;</button>
+        <button class="rv-ctrl rv-hangup" id="rv-stop" title="结束远程查看">&#10005;</button>
       </div>
     </div>
     <div id="rv-menu" class="rv-menu" style="display:none"></div>
