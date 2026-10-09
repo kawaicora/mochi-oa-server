@@ -48,6 +48,31 @@
     }
     g.stroke()
   }
+  // 圆环图：used/total 占比，中心显示百分比
+  function drawPie(canvas, used, total, color) {
+    if (!canvas) return
+    const g = canvas.getContext('2d')
+    const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2
+    const r = Math.min(w, h) / 2 - 10
+    const pct = total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0
+    g.clearRect(0, 0, w, h)
+    g.lineWidth = 14
+    g.strokeStyle = '#232936'
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke()
+    if (pct > 0) {
+      g.strokeStyle = color
+      g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (pct / 100) * Math.PI * 2); g.stroke()
+    }
+    g.fillStyle = '#e6eaf2'
+    g.font = 'bold 22px sans-serif'
+    g.textAlign = 'center'; g.textBaseline = 'middle'
+    g.fillText(Math.round(pct) + '%', cx, cy)
+  }
+  function pieTip(part, total, label) {
+    const usedGb = (part || 0) / 1073741824, totalGb = (total || 0) / 1073741824
+    const pct = total > 0 ? Math.round((part / total) * 100) : 0
+    return label + '：已用 ' + usedGb.toFixed(1) + 'GB / 共 ' + totalGb.toFixed(1) + 'GB（' + pct + '%），剩余 ' + ((totalGb - usedGb) || 0).toFixed(1) + 'GB'
+  }
 
   // ── 远程系统信息（客户端 dev:sys 上报）──
   function fmtMem(mem) { return (mem || []).map((m) => (m.capacity || '') + ' · ' + (m.speed || '') + ' · ' + (m.manufacturer || '') + ' · ' + (m.type || '')).join('\n') || '—' }
@@ -66,6 +91,17 @@
     $('s-board').textContent = info.board || '—'
     $('s-gpu').textContent = (info.gpuInfo || []).map((g) => g.name || '').filter(Boolean).join(' / ') || info.gpu || '—'
     $('s-uptime').textContent = uptime(info.uptime)
+    // 磁盘圆饼（fs 结构化，v2.9.88 起客户端上报）
+    const fs = info.fs || []
+    const diskTotal = fs.reduce((s, f) => s + (f.size || 0), 0)
+    const diskUsed = fs.reduce((s, f) => s + (f.used || 0), 0)
+    drawPie($('pie-disk'), diskUsed, diskTotal, '#f0a14a')
+    $('disk-tip').textContent = fs.length
+      ? fs.map((f) => (f.mount || '') + '  ' + Math.round((f.used || 0) / 1073741824) + 'GB/' + Math.round((f.size || 0) / 1073741824) + 'GB（' + (f.use || 0) + '%）').join('\n')
+      : (info.disk || '—')
+    // 内存圆饼
+    drawPie($('pie-mem'), (info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '#00c88a')
+    $('mem-tip').textContent = pieTip((info.totalMem || 0) - (info.freeMem || 0), info.totalMem, '内存')
     $('s-disk').textContent = info.disk || '—'
     $('s-memdetail').textContent = fmtMem(info.memDetail)
     $('s-gpuinfo').textContent = fmtGpuInfo(info.gpuInfo)
@@ -79,6 +115,10 @@
     if (perf.memPercent != null) { RV.memHist.push(perf.memPercent); if (RV.memHist.length > 80) RV.memHist.shift() }
     $('perf-cpu-v').textContent = (perf.cpu != null ? perf.cpu + '%' : '—')
     $('perf-mem-v').textContent = (perf.memPercent != null ? perf.memPercent + '%' : '—') + (perf.memUsed != null && perf.memTotal != null ? '（' + mb(perf.memUsed) + ' / ' + gb(perf.memTotal) + '）' : '')
+    if (perf.memUsed != null && perf.memTotal != null) {
+      drawPie($('pie-mem'), perf.memUsed, perf.memTotal, '#00c88a')
+      $('mem-tip').textContent = pieTip(perf.memUsed, perf.memTotal, '内存')
+    }
     drawLine($('perf-cpu'), RV.cpuHist, '#4a6cf7', 100)
     drawLine($('perf-mem'), RV.memHist, '#00c88a', 100)
     if (perf.gpus) $('s-gpuload').textContent = perf.gpus.map((g) => (g.name || 'GPU') + ' : ' + (g.load != null ? g.load + '%' : '—')).join('\n') || '—'

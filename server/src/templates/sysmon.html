@@ -25,8 +25,22 @@
       <div class="sys-card"><div class="sc-k">显卡</div><div class="sc-v" id="s-gpu">—</div></div>
       <div class="sys-card"><div class="sc-k">运行时长</div><div class="sc-v" id="s-uptime">—</div></div>
     </div>
-    <div class="sys-disk"><div class="sc-k">磁盘</div><pre id="s-disk" class="disk-pre">—</pre></div>
-    <div class="sys-disk"><div class="sc-k">内存详情（每根）</div><pre id="s-memdetail" class="disk-pre">—</pre></div>
+    <div class="sys-disk">
+      <div class="sc-k">磁盘</div>
+      <div class="pie-row">
+        <canvas id="pie-disk" class="pie-canvas" width="170" height="170"></canvas>
+        <div class="pie-tip" id="disk-tip">等待上报磁盘信息…</div>
+      </div>
+      <pre id="s-disk" class="disk-pre">—</pre>
+    </div>
+    <div class="sys-disk">
+      <div class="sc-k">内存使用</div>
+      <div class="pie-row">
+        <canvas id="pie-mem" class="pie-canvas" width="170" height="170"></canvas>
+        <div class="pie-tip" id="mem-tip">等待上报内存信息…</div>
+      </div>
+      <pre id="s-memdetail" class="disk-pre">—</pre>
+    </div>
     <div class="sys-disk"><div class="sc-k">GPU 使用率</div><pre id="s-gpuload" class="disk-pre">—</pre></div>
     <div class="sys-disk"><div class="sc-k">GPU 信息</div><pre id="s-gpuinfo" class="disk-pre">—</pre></div>
     <div class="sys-disk"><div class="sc-k">设备列表</div><pre id="s-devices" class="disk-pre">—</pre></div>

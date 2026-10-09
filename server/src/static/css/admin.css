@@ -150,6 +150,9 @@ input:focus{border-color:#4a6cf7}
 .sc-v{font-size:13px;color:#e6e6e6;word-break:break-all}
 .sys-disk{background:#1a1e28;border:1px solid #2a2f3d;border-radius:10px;padding:12px 14px;margin-bottom:12px}
 .disk-pre{white-space:pre-wrap;font-size:12px;color:#b8bcc6;margin-top:6px}
+.pie-row{display:flex;align-items:center;gap:16px;margin-top:8px}
+.pie-canvas{flex:0 0 auto}
+.pie-tip{font-size:12px;color:#cdd3df;line-height:1.6;white-space:pre-wrap}
 .perf-row{display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:12px}
 .perf-box{background:#1a1e28;border:1px solid #2a2f3d;border-radius:10px;padding:12px 14px}
 .perf-title{font-size:13px;color:#cfd3dc;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
