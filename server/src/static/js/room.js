@@ -108,8 +108,9 @@
     catch { return navigator.mediaDevices.getDisplayMedia({ video: true }) }
   }
   function updateLocalVideo(track) {
-    const audio = R.localStream.getAudioTracks().slice()
-    const arr = audio.slice()
+    const oldV = R.localStream.getVideoTracks()
+    oldV.forEach((t) => { if (t.__specStop) { try { t.__specStop() } catch (e) {} } try { t.stop() } catch (e) {} })
+    const arr = R.localStream.getAudioTracks().slice()
     if (track) arr.push(track)
     R.localStream = new MediaStream(arr)
     R.engine && R.engine.replaceTrack(track, 'video')
@@ -386,6 +387,12 @@
     } catch (e) { A.toast('设备切换失败') }
   }
 
+  // ─── 控制栏左键 ───
+  $('ctrl-mute').onclick = R.toggleMute
+  $('ctrl-cam').onclick = () => R.toggleCamera()
+  $('ctrl-screen').onclick = () => R.toggleScreenShare()
+  $('ctrl-rec').onclick = () => R.toggleRecording()
+
   // ─── 右键设备菜单 ───
   $('ctrl-mute').addEventListener('contextmenu', async (ev) => { ev.preventDefault(); await openMicMenu() })
   $('ctrl-cam').addEventListener('contextmenu', async (ev) => { ev.preventDefault(); await openCamMenu() })
@@ -440,6 +447,7 @@
     R.spectrumStyle = style
     if (!R.isCameraOff || R.isScreenSharing) return
     const t = spectrumVideoTrack()
+    if (!t) { A.toast('切换频谱失败：未获取到音频，请允许麦克风权限后重试'); return }
     updateLocalVideo(t)
     R.renderGrid()
   }
