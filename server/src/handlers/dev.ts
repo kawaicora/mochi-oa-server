@@ -35,6 +35,8 @@ interface RemoteDevice {
   lastSeen: number
   /** 当前控制它的浏览器 socketId（dev:view 时绑定；离线自动清除） */
   controller?: string
+  /** 被控端上报的系统信息快照（dev:sys） */
+  sys?: { info: Record<string, unknown>; perf: Record<string, unknown>; ts: number }
 }
 
 /** 在线远程设备表：deviceId → RemoteDevice（服务端进程内维护） */
@@ -103,6 +105,20 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       ack(ok({ deviceId }))
     })
 
+    // 被控端上报系统信息（实时同步电脑状态）→ 存快照并转发给控制端
+    socket.on('dev:sys', (data: unknown) => {
+      const d = (data ?? {}) as { deviceId?: unknown; info?: unknown; perf?: unknown }
+      const deviceId = String(d.deviceId ?? '')
+      const dev = remoteDevices.get(deviceId)
+      if (!dev || dev.socket !== socket) return
+      dev.lastSeen = Date.now()
+      dev.sys = { info: (d.info ?? {}) as Record<string, unknown>, perf: (d.perf ?? {}) as Record<string, unknown>, ts: Date.now() }
+      if (dev.controller) {
+        const ctrl = io.sockets.sockets.get(dev.controller)
+        if (ctrl) send(ctrl, 'dev:sys', { deviceId, info: d.info, perf: d.perf })
+      }
+    })
+
     // ── 信令：按角色分发（被控端→控制端 / 控制端→被控端），避免双分支双 ack ──
     socket.on('dev:signal', (data: unknown, cb?: Ack) => {
       const ack = cb ?? (() => {})
@@ -147,7 +163,7 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       // 绑定控制器（同一设备仅一个控制端；抢占时替换）
       dev.controller = socket.id
       send(dev.socket, 'dev:view', { deviceId })
-      ack(ok({ deviceId, name: dev.name, username: dev.username, os: dev.os, ip: dev.ip, iceServers: config.iceServers }))
+      ack(ok({ deviceId, name: dev.name, username: dev.username, os: dev.os, ip: dev.ip, iceServers: config.iceServers, sys: dev.sys ?? null }))
     })
 
     // 请求被控端枚举设备

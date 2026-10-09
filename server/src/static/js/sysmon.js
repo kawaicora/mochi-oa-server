@@ -46,10 +46,13 @@
     $('dd-name').textContent = d.name || '设备'
     $('dd-meta').textContent = (d.username || '') + ' · ' + (d.os || '') + ' · ' + (d.ip || '')
     if (d.remote) {
-      // 远程客户端电脑：复用房间 UI 的远程查看（remote-view.js）
-      $('sys-cards').style.display = 'none'
-      $('sys-disk').style.display = 'none'
-      document.querySelectorAll('#dev-detail .perf-row,#dev-detail .panel-box').forEach((n) => { if (n.id !== 'remote-panel' && n.id !== 'rv-menu') n.style.display = 'none' })
+      // 远程客户端电脑：系统信息 + 实时性能 + 远程画面（数据来自客户端 dev:sys 上报 / WebRTC）
+      // 本地专属（进程列表/执行命令/截屏/摄像头）隐藏
+      $('sys-cards').style.display = ''
+      $('sys-disk').style.display = ''
+      document.querySelectorAll('#dev-detail .perf-row').forEach((n) => { n.style.display = '' })
+      document.querySelectorAll('#dev-detail .media-row').forEach((n) => { n.style.display = 'none' })
+      document.querySelectorAll('#dev-detail .panel-box').forEach((n) => { n.style.display = (n.id === 'remote-panel' || n.id === 'rv-menu') ? '' : 'none' })
       $('remote-panel').style.display = ''
       $('sys-refresh').style.display = 'none'
       if (S._poll) clearInterval(S._poll)
@@ -59,7 +62,7 @@
     $('remote-panel').style.display = 'none'
     $('sys-cards').style.display = ''
     $('sys-disk').style.display = ''
-    document.querySelectorAll('#dev-detail .perf-row,#dev-detail .panel-box').forEach((n) => { n.style.display = '' })
+    document.querySelectorAll('#dev-detail .perf-row,#dev-detail .media-row,#dev-detail .panel-box').forEach((n) => { n.style.display = '' })
     $('sys-refresh').style.display = ''
     S.loadInfo()
     S.loadProcesses()
