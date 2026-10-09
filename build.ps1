@@ -20,9 +20,12 @@ if ($LASTEXITCODE -ne 0) { Write-Host '[ERR] static sync failed'; exit $LASTEXIT
 
 Write-Host '===== [3/3] Docker deploy/restart ====='
 Set-Location $root
-docker compose up -d --build
-if ($LASTEXITCODE -ne 0) {
+# docker 把进度/状态写到 stderr，PowerShell 5.1 会把 native stderr 误报为终止错误中断脚本；
+# 用 cmd /c 把 stderr 并入 stdout，再用 $LASTEXITCODE 判断真正失败。
+& cmd /c "docker compose up -d --build 2>&1"
+$code = $LASTEXITCODE
+if ($code -ne 0) {
   Write-Host '[warn] compose up failed, try direct restart...'
-  docker restart mochi-oa-server-2f8e9c
+  & cmd /c "docker restart mochi-oa-server-2f8e9c"
 }
 Write-Host '===== DONE ====='

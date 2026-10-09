@@ -128,13 +128,14 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       const d = (data ?? {}) as { deviceId?: unknown; name?: unknown; os?: unknown; ip?: unknown; username?: unknown }
       const deviceId = String(d.deviceId ?? '')
       if (!deviceId) return
-      upsertDev(socket, {
+      const dev = upsertDev(socket, {
         deviceId,
         name: String(d.name ?? ''),
         os: String(d.os ?? ''),
         ip: String(d.ip ?? ''),
         username: String(d.username ?? '')
       })
+      if (dev) console.log(`[dev] 心跳 dev:heartbeat deviceId=${deviceId} name=${dev.name} os=${dev.os} ip=${dev.ip} user=${dev.username}`)
     })
 
     // 被控端上报枚举设备 → 转发给控制端（upsert 建立/更新设备）
