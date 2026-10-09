@@ -11,6 +11,7 @@ import { constants, generateKeyPairSync, privateDecrypt } from 'node:crypto'
 import type { KeyObject } from 'node:crypto'
 import { verifyCodes } from '../verify-code'
 import { resetTokens } from '../reset-tokens'
+import { isServerAdmin } from './mail'
 import type { Mailer } from '../mailer'
 
 export interface Ctx {
@@ -403,6 +404,11 @@ export function registerAuthHandlers(ctx: Ctx): void {
 
       const payload = await loginPayload(store, user, session)
       payload.token = token
+      // 登录时即判定 SERVER_ADMIN（服务器所有者权限，与公司/群角色无关）——/view/room 等服务器级能力据此放行
+      payload.serverAdmin = isServerAdmin(
+        { id: user.id, username: user.username, nick: user.nick || user.username, sessionId: session.id, sessionDevice: device },
+        config
+      )
       ack(ok(payload))
     })
 
@@ -420,7 +426,8 @@ export function registerAuthHandlers(ctx: Ctx): void {
         ok({
           user: { id: user.id, username: user.username, nick: user.nick, avatar: user.avatar, email: user.email, phone: user.phone, extra: user.extra },
           companies,
-          session: session ? sessionView(session) : null
+          session: session ? sessionView(session) : null,
+          serverAdmin: isServerAdmin(auth, config)
         })
       )
     })

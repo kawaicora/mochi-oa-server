@@ -4,6 +4,7 @@ import type { Store } from '../db/store'
 import type { AuthUser } from './auth'
 import { fail, groupRoom, ok, userRoom } from '../util'
 import { getIceServers } from '../ice'
+import { isServerAdmin } from './mail'
 
 export interface RtcCtx {
   io: Server
@@ -260,6 +261,8 @@ export function registerRtcHandlers(ctx: RtcCtx): void {
       const ack = cb ?? (() => {})
       const u = authed(socket)
       if (!u) return ack(fail('未登录'))
+      // 会议大厅（/view/room 数据层）仅 SERVER_ADMIN 可查：登录已判，此处兜底
+      if (!isServerAdmin(u, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
       expireSweep()
       ack(ok({ rooms: liveRooms() }))
     })

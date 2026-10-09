@@ -130,6 +130,14 @@ input:focus{border-color:#4a6cf7}
   <div class="tip">也可通过客户端设置页复制会话 Token，以 ?token=… 访问本页免登录</div>
 </div>
 
+<!-- 无权限视图 -->
+<div id="view-noperm" class="card" style="display:none">
+  <h1>会议大厅</h1>
+  <div class="sub" style="color:#ffb3bc">需要 SERVER_ADMIN 权限</div>
+  <div class="tip">仅服务器管理员（SERVER_ADMIN）可访问本页面。请联系管理员开通账号，或使用客户端「设置」中复制管理员会话 Token，以 ?token=… 访问。</div>
+  <button class="btn ghost" id="noperm-back">返回登录</button>
+</div>
+
 <!-- 会议大厅列表 -->
 <div id="view-list" style="display:none">
   <div class="header">
@@ -231,8 +239,9 @@ function connect() {
 
 // ═══ 视图切换 ═══
 function viewNow() { return $('view-list').style.display !== 'none' ? 'list' : $('view-call').style.display !== 'none' ? 'call' : 'login'; }
-function showLogin() { $('view-login').style.display = ''; $('view-list').style.display = 'none'; $('view-call').style.display = 'none'; }
-function showList() { $('view-login').style.display = 'none'; $('view-list').style.display = ''; $('view-call').style.display = 'none'; $('join-title').textContent = '加入会议'; $('join-title').closest('.modal').style.display = 'none'; }
+function showLogin() { $('view-login').style.display = ''; $('view-list').style.display = 'none'; $('view-call').style.display = 'none'; $('view-noperm').style.display = 'none'; }
+function showNoPerm() { $('view-login').style.display = 'none'; $('view-list').style.display = 'none'; $('view-call').style.display = 'none'; $('view-noperm').style.display = ''; }
+function showList() { $('view-login').style.display = 'none'; $('view-list').style.display = ''; $('view-call').style.display = 'none'; $('view-noperm').style.display = 'none'; $('join-title').textContent = '加入会议'; $('join-title').closest('.modal').style.display = 'none'; }
 
 // ═══ 登录 ═══
 async function doLogin() {
@@ -245,6 +254,8 @@ async function doLogin() {
     await new Promise((res, rej) => { sock.once('connect', res); sock.once('connect_error', rej); setTimeout(() => rej(new Error('连接超时')), 8000); });
     const ack = await emitAck('auth:login', { account, password, device: 'web-room' });
     if (!ack.ok) { showErr(ack.error || '登录失败'); return; }
+    // 登录时判定 SERVER_ADMIN：非管理员不允许进入会议大厅
+    if (!ack.serverAdmin) { token = ''; localStorage.removeItem('vr_token'); showNoPerm(); return; }
     token = ack.token; localStorage.setItem('vr_token', token);
     myUser = ack.user;
     enterList();
@@ -516,6 +527,7 @@ $('login-btn').onclick = doLogin;
 $('login-pwd').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 $('login-account').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('login-pwd').focus(); });
 $('logout-btn').onclick = () => { token = ''; localStorage.removeItem('vr_token'); sock.disconnect(); showLogin(); };
+$('noperm-back').onclick = () => { showLogin(); };
 
 (async function init() {
   // URL ?token= 直接进入
@@ -527,7 +539,11 @@ $('logout-btn').onclick = () => { token = ''; localStorage.removeItem('vr_token'
       connect();
       await new Promise((res, rej) => { sock.once('connect', res); sock.once('connect_error', rej); setTimeout(() => rej(new Error('连接超时')), 8000); });
       const ack = await emitAck('auth:me', {});
-      if (ack.ok) { myUser = ack.user; enterList(); return; }
+      if (ack.ok) {
+        // token 进入同样判 SERVER_ADMIN
+        if (!ack.serverAdmin) { token = ''; localStorage.removeItem('vr_token'); showNoPerm(); return; }
+        myUser = ack.user; enterList(); return;
+      }
       token = ''; localStorage.removeItem('vr_token'); showLogin();
     } catch { showLogin(); }
   } else { showLogin(); }
