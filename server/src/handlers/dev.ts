@@ -265,5 +265,37 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       send(dev.socket, 'dev:stop', { deviceId })
       ack(ok({ deviceId }))
     })
+
+    // 控制端请求在被控端远程执行命令 → 转发被控端（shell: cmd/powershell/auto，Linux 忽略用默认 sh）
+    socket.on('dev:execRemote', (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      if (!notSlave(socket)) return ack(fail('被控端连接不可控制设备'))
+      if (!isAdminSocket(socket, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
+      const d = (data ?? {}) as { deviceId?: unknown; shell?: unknown; cmd?: unknown }
+      const deviceId = String(d.deviceId ?? '')
+      const cmd = String(d.cmd ?? '').trim()
+      const dev = remoteDevices.get(deviceId)
+      if (!dev) return ack(fail('该设备已离线'))
+      if (!cmd) return ack(fail('命令为空'))
+      send(dev.socket, 'dev:exec', { deviceId, shell: String(d.shell ?? 'auto'), cmd })
+      console.log(`[dev] 控制端 ${socket.id} 远程执行命令 shell=${String(d.shell ?? 'auto')} cmd=${cmd} -> ${deviceId}（${dev.name}）`)
+      ack(ok({ deviceId }))
+    })
+
+    // 被控端执行结果 → 转发给当前控制端
+    socket.on('dev:execResult', (data: unknown, cb?: Ack) => {
+      const ack = cb ?? (() => {})
+      const d = (data ?? {}) as { deviceId?: unknown; ok?: unknown; exitCode?: unknown; stdout?: unknown; stderr?: unknown }
+      const deviceId = String(d.deviceId ?? '')
+      const dev = remoteDevices.get(deviceId)
+      if (!dev || dev.socket !== socket) return ack(fail('设备不存在'))
+      const payload = { deviceId, ok: !!d.ok, exitCode: Number(d.exitCode) || 0, stdout: String(d.stdout ?? ''), stderr: String(d.stderr ?? '') }
+      if (dev.controller) {
+        const ctrl = io.sockets.sockets.get(dev.controller)
+        if (ctrl) send(ctrl, 'dev:execResult', payload)
+      }
+      console.log(`[dev] 被控端命令结果 deviceId=${deviceId} ok=${payload.ok} exit=${payload.exitCode} 转发至=${dev.controller || '(无控制端)'}`)
+      ack(ok({ deviceId }))
+    })
   })
 }

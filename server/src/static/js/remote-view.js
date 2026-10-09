@@ -289,7 +289,32 @@
     }
   }
 
+  // 独立前置窗口（画中画 PiP）：把远程视频弹到系统级置顶小窗，独立于页面
+  RV.pip = function () {
+    const vid = $('rv-video')
+    if (!vid || !document.pictureInPictureEnabled) { alert('当前浏览器不支持画中画（建议 Chrome / Edge）'); return }
+    if (document.pictureInPictureElement === vid) {
+      void document.exitPictureInPicture().catch(() => {})
+    } else if (vid.readyState >= 1 && vid.srcObject) {
+      void vid.requestPictureInPicture().catch((e) => log('PiP 失败 ' + e))
+    } else {
+      alert('请先开始远程查看（共享屏幕/摄像头）')
+    }
+  }
+  function pipState() {
+    const btn = document.getElementById('rv-pip')
+    if (!btn) return
+    const active = document.pictureInPictureElement
+    btn.classList.toggle('rv-ctrl-on', !!active)
+    btn.title = active ? '退出独立窗口（回到内嵌画面）' : '独立前置窗口（画中画，置顶显示远程画面）'
+  }
+  if (typeof document.pictureInPictureEnabled === 'boolean') {
+    document.addEventListener('enterpictureinpicture', pipState)
+    document.addEventListener('leavepictureinpicture', pipState)
+  }
+
   RV.stop = function () {
+    if (document.pictureInPictureElement) { try { void document.exitPictureInPicture() } catch {} }
     if (RV.deviceId) A.emit('dev:stop', { deviceId: RV.deviceId }).catch(() => {})
     RV._teardownPC()
     RV._pendCands = []

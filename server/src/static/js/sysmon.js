@@ -53,8 +53,9 @@
       document.querySelectorAll('#dev-detail .sys-disk').forEach((n) => { n.style.display = '' })
       document.querySelectorAll('#dev-detail .perf-row').forEach((n) => { n.style.display = '' })
       document.querySelectorAll('#dev-detail .media-row').forEach((n) => { n.style.display = 'none' })
-      document.querySelectorAll('#dev-detail .panel-box').forEach((n) => { n.style.display = (n.id === 'remote-panel' || n.id === 'rv-menu') ? '' : 'none' })
+      document.querySelectorAll('#dev-detail .panel-box').forEach((n) => { n.style.display = (n.id === 'remote-panel' || n.id === 'rv-menu' || n.id === 'exec-panel') ? '' : 'none' })
       $('remote-panel').style.display = ''
+      $('exec-hint').textContent = '目标：' + (d.name || d.deviceId) + '（远程电脑，Windows 可选 CMD/PowerShell，Linux 自动用默认 shell）'
       $('sys-refresh').style.display = 'none'
       if (S._poll) clearInterval(S._poll)
       A.remoteView.open(d)
@@ -64,6 +65,7 @@
     $('sys-cards').style.display = ''
     document.querySelectorAll('#dev-detail .sys-disk').forEach((n) => { n.style.display = '' })
     document.querySelectorAll('#dev-detail .perf-row,#dev-detail .media-row,#dev-detail .panel-box').forEach((n) => { n.style.display = '' })
+    $('exec-hint').textContent = '目标：本机（服务器）'
     $('sys-refresh').style.display = ''
     S.loadInfo()
     S.loadProcesses()
@@ -139,10 +141,30 @@
   S.exec = async function () {
     const cmd = $('exec-input').value.trim()
     if (!cmd) { A.toast('请输入命令'); return }
+    const shell = ($('exec-shell')?.value || 'auto')
+    const d = S.currentDevice
+    if (d && d.remote) {
+      // 远程设备：在目标电脑上执行（服务端转发给被控端），结果经 dev:execResult 异步回传
+      $('exec-out').textContent = '正在远程执行（' + (d.name || d.deviceId) + '，shell=' + shell + '）…'
+      S._execPending = { id: d.id }
+      A.sock.emit('dev:execRemote', { deviceId: d.id, shell, cmd })
+      return
+    }
     $('exec-out').textContent = '正在执行…'
     const ack = await A.emit('sys:exec', { cmd }).catch(() => ({ ok: false }))
     if (!ack.ok) { $('exec-out').textContent = '执行失败：' + (ack.error || ''); return }
     $('exec-out').textContent = 'exit=' + ack.exitCode + '\n\n' + (ack.stdout || '') + (ack.stderr ? ('\n[stderr]\n' + ack.stderr) : '')
+  }
+
+  // 远程命令执行结果回传（仅接受当前设备）
+  S.bindExecResult = function () {
+    if (S._execBound) return
+    S._execBound = true
+    A.sock.on('dev:execResult', (r) => {
+      if (!S._execPending || S._execPending.id !== r.deviceId) return
+      S._execPending = null
+      $('exec-out').textContent = 'exit=' + (r.exitCode ?? 0) + '\n\n' + (r.stdout || '') + (r.stderr ? ('\n[stderr]\n' + r.stderr) : '')
+    })
   }
 
   S.shot = async function () {
@@ -171,11 +193,13 @@
     $('exec-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') S.exec() })
     $('shot-btn').onclick = S.shot
     $('cam-btn').onclick = S.cam
+    S.bindExecResult()
     // 远程查看按钮（remote-view.js）
     $('rv-cam').onclick = () => { if (A.remoteView) A.remoteView.cam() }
     $('rv-screen').onclick = () => { if (A.remoteView) A.remoteView.screen() }
     $('rv-mic').onclick = () => { if (A.remoteView) A.remoteView.mic() }
     $('rv-stop').onclick = () => { if (A.remoteView) A.remoteView.stop() }
+    $('rv-pip').onclick = () => { if (A.remoteView) A.remoteView.pip() }
     $('rv-cam').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.cam() })
     $('rv-mic').addEventListener('contextmenu', (e) => { e.preventDefault(); if (A.remoteView) A.remoteView.mic() })
     document.addEventListener('click', (e) => { if (!e.target.closest('#rv-menu')) A.remoteView && A.remoteView.hideMenu() })
