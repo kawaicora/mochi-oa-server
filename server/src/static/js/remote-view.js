@@ -238,16 +238,20 @@
 
   RV.start = async function (kind, device) {
     if (!RV.deviceId) return
-    RV._teardownPC()
     RV._pendCands = []
     RV._kind = kind
     $('rv-empty').style.display = ''
     $('rv-state').textContent = '正在请求' + (kind === 'screen' ? '屏幕' : kind === 'mic' ? '麦克风' : '摄像头') + '…'
     const ack = await A.emit('dev:start', { deviceId: RV.deviceId, kind, device }).catch(() => ({ ok: false }))
     if (!ack.ok) { $('rv-state').textContent = '启动失败：' + (ack.error || ''); return }
-    if (!RV._buildPC()) return
-    // 被控端将作为 sender 发 offer；我们等待其 offer
-    setTimeout(() => { if (!RV._pc || !RV._pc.remoteDescription) log('等待被控端 offer…') }, 2000)
+    // 首次建立连接；已连接则复用（被控端 replaceTrack 把新轨推送到同一连接，无需重建）
+    if (!RV._pc) {
+      if (!RV._buildPC()) return
+      // 被控端将作为 sender 发 offer；我们等待其 offer
+      setTimeout(() => { if (!RV._pc || !RV._pc.remoteDescription) log('等待被控端 offer…') }, 2000)
+    } else {
+      log('复用连接，切换 ' + kind + '（被控端 replaceTrack）')
+    }
   }
 
   RV.cam = function () { RV._menu(RV.cams, 'camera', '选择摄像头') }
