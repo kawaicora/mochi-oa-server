@@ -162,7 +162,7 @@ input:focus{border-color:#4a6cf7}
 .pie-item canvas{width:120px;height:120px;background:#0d1017;border-radius:8px}
 .pie-item-tip{font-size:12px;color:#8aa;margin-top:4px;white-space:nowrap}
 .pie-nodata{color:#5a6478;font-size:13px;padding:8px 0}
-.perf-row{display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:12px}
+.perf-row{display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin:0 auto 12px;max-width:900px}
 .perf-box{background:#1a1e28;border:1px solid #2a2f3d;border-radius:10px;padding:12px 14px}
 .perf-title{font-size:13px;color:#cfd3dc;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
 .perf-num{color:#4a6cf7;font-weight:600}
@@ -183,7 +183,7 @@ input:focus{border-color:#4a6cf7}
 .media-box{background:#0d1117;border:1px solid #2a2f3d;border-radius:6px;min-height:160px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 
 /* ── 远程电脑查看（remote-view，房间风格控制栏）── */
-.rv-stage{position:relative;background:#0d1117;border:1px solid #2a2f3d;border-radius:8px;min-height:360px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.rv-stage{position:relative;background:#0d1117;border:1px solid #2a2f3d;border-radius:8px;min-height:360px;max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .rv-stage video{width:100%;height:100%;max-height:520px;object-fit:contain;background:#000}
 .rv-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8a8f99;font-size:13px;pointer-events:none}
 /* 底部控制栏：居中、圆形大按钮，风格同会议房间 control-bar */
