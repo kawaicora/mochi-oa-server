@@ -63,7 +63,7 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       const d = (data ?? {}) as { deviceId?: unknown; name?: unknown; os?: unknown; ip?: unknown; username?: unknown }
       const deviceId = String(d.deviceId ?? '').trim()
       const u = (socket.data.auth as AuthUser | null) ?? null
-      if (!deviceId || !u) return ack(fail('参数不合法'))
+      if (!deviceId || !u) { console.log(`[dev] dev:register 拒绝（deviceId=${deviceId || '(空)'} 登录=${!!u}）socket=${socket.id}`); return ack(fail('参数不合法')) }
       const dev: RemoteDevice = {
         deviceId,
         socket,
@@ -80,6 +80,7 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       socket.data.isSlave = true
       // 清理同名/同 socket 旧记录
       for (const [k, v] of remoteDevices) if (v.socket === socket && k !== deviceId) remoteDevices.delete(k)
+      console.log(`[dev] 被控端上线 deviceId=${deviceId} name=${dev.name} os=${dev.os} ip=${dev.ip} user=${dev.username} socket=${socket.id}（当前在线 ${remoteDevices.size} 台）`)
       ack(ok({ deviceId }))
     })
 
@@ -96,12 +97,13 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       const d = (data ?? {}) as { deviceId?: unknown; cams?: unknown; mics?: unknown }
       const deviceId = String(d.deviceId ?? '')
       const dev = remoteDevices.get(deviceId)
-      if (!dev || dev.socket !== socket) return ack(fail('设备不存在'))
+      if (!dev || dev.socket !== socket) { console.log(`[dev] dev:devices 设备不存在或 socket 不匹配 deviceId=${deviceId}`); return ack(fail('设备不存在')) }
       const payload = { deviceId, cams: d.cams ?? [], mics: d.mics ?? [] }
       if (dev.controller) {
         const ctrl = io.sockets.sockets.get(dev.controller)
         if (ctrl) send(ctrl, 'dev:devices', payload)
       }
+      console.log(`[dev] 被控端上报设备 deviceId=${deviceId} cams=${(d.cams as unknown[] | undefined)?.length ?? 0} mics=${(d.mics as unknown[] | undefined)?.length ?? 0} 转发至=${dev.controller || '(无控制端)'}`)
       ack(ok({ deviceId }))
     })
 
@@ -132,6 +134,7 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
         if (dev.controller) {
           const ctrl = io.sockets.sockets.get(dev.controller)
           if (ctrl) send(ctrl, 'dev:signal', { deviceId, signal: d.signal })
+          console.log(`[dev] 被控端→控制端 信令 ${(d.signal as { type?: string } | undefined)?.type ?? 'candidate'} <- ${deviceId}`)
         }
         ack(ok())
         return
@@ -140,14 +143,17 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       if (!isAdminSocket(socket, config)) return ack(fail('需要 SERVER_ADMIN 权限'))
       if (dev.controller !== socket.id) return ack(fail('你不是该设备的控制器'))
       send(dev.socket, 'dev:signal', { deviceId, signal: d.signal })
+      console.log(`[dev] 控制端→被控端 信令 ${(d.signal as { type?: string } | undefined)?.type ?? 'candidate'} -> ${deviceId}`)
       ack(ok())
     })
 
     // 断开：清在线表
     socket.on('disconnect', () => {
+      const removed: string[] = []
       for (const [k, v] of remoteDevices) {
-        if (v.socket === socket) remoteDevices.delete(k)
+        if (v.socket === socket) { remoteDevices.delete(k); removed.push(k) }
       }
+      if (removed.length) console.log(`[dev] 被控端离线 socket=${socket.id} devices=${removed.join(',')}（剩余 ${remoteDevices.size} 台）`)
     })
 
     // ── 控制端（浏览器，需 SERVER_ADMIN；被控端连接不可作为控制端）──
@@ -159,10 +165,11 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       const d = (data ?? {}) as { deviceId?: unknown }
       const deviceId = String(d.deviceId ?? '')
       const dev = remoteDevices.get(deviceId)
-      if (!dev) return ack(fail('该设备已离线'))
+      if (!dev) { console.log(`[dev] dev:view 目标不存在 deviceId=${deviceId} socket=${socket.id}`); return ack(fail('该设备已离线')) }
       // 绑定控制器（同一设备仅一个控制端；抢占时替换）
       dev.controller = socket.id
       send(dev.socket, 'dev:view', { deviceId })
+      console.log(`[dev] 控制端 ${socket.id} 查看设备 ${deviceId}（${dev.name}）`)
       ack(ok({ deviceId, name: dev.name, username: dev.username, os: dev.os, ip: dev.ip, iceServers: config.iceServers, sys: dev.sys ?? null }))
     })
 
@@ -192,6 +199,7 @@ export function registerDevHandlers(ctx: { io: Server; store: Store; config: Ser
       if (!['camera', 'screen', 'mic'].includes(kind)) return ack(fail('采集类型不合法'))
       dev.controller = socket.id
       send(dev.socket, 'dev:start', { deviceId, kind, device: d.device, iceServers: config.iceServers })
+      console.log(`[dev] 控制端 ${socket.id} 请求采集 ${kind} <- ${deviceId}（${dev.name}）`)
       ack(ok({ deviceId, kind, iceServers: config.iceServers }))
     })
 
